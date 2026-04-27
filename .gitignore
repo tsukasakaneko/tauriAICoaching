@@ -1,0 +1,22 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Build outputs
+dist/
+dist-ssr/
+
+# Tauri build
+src-tauri/target/
+
+# Environment files (contain secrets)
+backend/.env
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Frontend build cache
+*.local
+.vite/

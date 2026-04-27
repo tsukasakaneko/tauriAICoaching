@@ -1,0 +1,290 @@
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d2e;
+  --surface-hover: #212438;
+  --border: #2a2d3e;
+  --accent: #ff4655;
+  --accent-hover: #e03545;
+  --text: #ececec;
+  --text-muted: #8a8fa8;
+  --success: #4caf50;
+  --warning: #ff9800;
+  --error: #ff6b6b;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body { background: var(--bg); min-height: 100vh; }
+
+.app { min-height: 100vh; }
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+}
+
+/* ---- Brand ---- */
+.login-brand {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+.brand-small {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.brand-accent { color: var(--accent); }
+
+/* ---- Screens ---- */
+.screen {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* ---- Login Screen ---- */
+.login-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 5rem;
+}
+.login-screen h2 {
+  color: var(--text-muted);
+  margin-bottom: 2rem;
+  font-weight: 400;
+}
+.login-screen form {
+  width: 100%;
+  max-width: 380px;
+}
+
+/* ---- Form elements ---- */
+.field { margin-bottom: 1.4rem; }
+.field label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+select,
+textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+input::placeholder, textarea::placeholder { color: var(--text-muted); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+select { cursor: pointer; }
+textarea { resize: vertical; }
+
+.checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+.checkbox-label:hover { border-color: var(--accent); background: var(--surface-hover); }
+.checkbox-label input { accent-color: var(--accent); }
+
+/* ---- Buttons ---- */
+button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; font-family: inherit; transition: background 0.15s, opacity 0.15s; }
+
+.primary-btn {
+  width: 100%;
+  background: var(--accent);
+  color: white;
+  padding: 0.75rem;
+  font-weight: 700;
+  font-size: 1rem;
+  margin-top: 0.75rem;
+  letter-spacing: 0.03em;
+}
+.primary-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.primary-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.analyze-btn { margin-top: 1.25rem; }
+
+.link-btn {
+  background: none;
+  color: var(--text-muted);
+  text-decoration: underline;
+  margin-top: 1.25rem;
+  padding: 0.25rem;
+  font-size: 0.9rem;
+}
+.link-btn:hover { color: var(--text); }
+
+.back-btn {
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.back-btn:hover { border-color: var(--accent); }
+
+.logout-btn {
+  background: var(--surface);
+  color: var(--text-muted);
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+}
+.logout-btn:hover { color: var(--text); border-color: var(--border); }
+
+/* ---- Badges ---- */
+.badge {
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.badge.paid { background: var(--success); color: white; }
+.badge.free { background: var(--border); color: var(--text-muted); }
+
+/* ---- Messages ---- */
+.error {
+  color: var(--error);
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+}
+.paywall-message {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-top: 0.75rem;
+  color: var(--accent);
+  line-height: 1.6;
+}
+.paywall-message p { margin-bottom: 0.25rem; }
+.paywall-message p:last-child { margin-bottom: 0; }
+
+/* ---- Form Screen ---- */
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.user-info { display: flex; align-items: center; gap: 0.6rem; }
+.user-email { color: var(--text-muted); font-size: 0.85rem; }
+.form-title {
+  font-size: 1.3rem;
+  margin-bottom: 1.5rem;
+  color: var(--text);
+}
+
+/* ---- Report Screen ---- */
+.report-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.report-title {
+  font-size: 1.8rem;
+  color: var(--accent);
+  margin-bottom: 1.75rem;
+}
+.report-section { margin-bottom: 2.25rem; }
+.report-section h2 {
+  font-size: 1.15rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+/* Summary */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+.summary-card {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+}
+.summary-card h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+.summary-card p { line-height: 1.6; }
+.focus-card { border-color: var(--accent); }
+.focus-card h3 { color: var(--accent); }
+
+/* Improvements */
+.improvement-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+.improvement-card h3 {
+  font-size: 1rem;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+.improvement-card p { margin-bottom: 0.5rem; line-height: 1.6; }
+.label { color: var(--text-muted); font-weight: 600; }
+.actions { margin-top: 0.5rem; }
+.actions ul { margin-left: 1.25rem; margin-top: 0.3rem; }
+.actions li { margin-bottom: 0.3rem; line-height: 1.5; }
+
+/* Training Plan */
+.training-list { margin-left: 1.5rem; }
+.training-list li {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.training-list li:last-child { border-bottom: none; }
