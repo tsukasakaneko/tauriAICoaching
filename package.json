@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:backend": "node backend/server.js",
+    "dev:all": "concurrently --kill-others \"npm run dev\" \"npm run dev:backend\"",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
@@ -19,6 +21,7 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
     "typescript": "^5.7.3",
     "vite": "^6.3.5"
   }

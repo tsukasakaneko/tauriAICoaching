@@ -105,8 +105,29 @@ router.post("/analyze", requireAuth, async (req, res) => {
     if (!content) throw new Error("OpenAI returned empty response");
 
     const parsed = JSON.parse(content);
-    if (!parsed.improvements || !parsed.training_plan || !parsed.summary) {
-      throw new Error("Unexpected AI response structure");
+
+    // Structural validation: ensure arrays/objects have the right shape
+    // so ReportScreen never calls .map() on a non-array
+    const isValidImprovement = (item) =>
+      item && typeof item === "object" &&
+      typeof item.title === "string" &&
+      typeof item.description === "string" &&
+      typeof item.cause === "string" &&
+      Array.isArray(item.actions) &&
+      item.actions.every((a) => typeof a === "string");
+
+    if (
+      !Array.isArray(parsed.improvements) ||
+      !parsed.improvements.every(isValidImprovement) ||
+      !Array.isArray(parsed.training_plan) ||
+      !parsed.training_plan.every((d) => typeof d === "string") ||
+      !parsed.summary ||
+      typeof parsed.summary !== "object" ||
+      typeof parsed.summary.strengths !== "string" ||
+      typeof parsed.summary.weaknesses !== "string" ||
+      typeof parsed.summary.focus !== "string"
+    ) {
+      throw new Error("AI response failed structural validation");
     }
 
     res.json(parsed);

@@ -1,6 +1,6 @@
 import type { AuthResponse, CoachingFormData, CoachingReport, User } from "./types";
 
-const BASE_URL = "http://localhost:3001";
+const BASE_URL = "http://127.0.0.1:3001";
 
 function getToken(): string | null {
   return localStorage.getItem("token");
