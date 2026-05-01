@@ -1,6 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const OpenAI = require("openai");
+const Anthropic = require("@anthropic-ai/sdk");
 const db = require("../db");
 
 const router = express.Router();
@@ -87,22 +87,24 @@ router.post("/analyze", requireAuth, async (req, res) => {
 
 上記の情報を基に、Valorantのコーチングレポートを生成してください。必ず有効なJSONのみを返してください。`;
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
+    const response = await anthropic.messages.create({
+      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
       max_tokens: 2000,
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: userPrompt }],
     });
 
-    const content = completion.choices[0]?.message?.content;
-    if (!content) throw new Error("OpenAI returned empty response");
+    const content = response.content[0]?.text;
+    if (!content) throw new Error("Anthropic returned empty response");
 
     const parsed = JSON.parse(content);
 
@@ -133,8 +135,8 @@ router.post("/analyze", requireAuth, async (req, res) => {
     res.json(parsed);
   } catch (err) {
     console.error("Analyze error:", err);
-    if (err.message?.includes("API key") || err.message?.includes("Incorrect API")) {
-      return res.status(500).json({ message: "OpenAI APIキーが正しく設定されていません" });
+    if (err.status === 401 || err.message?.includes("API key")) {
+      return res.status(500).json({ message: "Anthropic APIキーが正しく設定されていません" });
     }
     res.status(500).json({ message: "AI分析に失敗しました。もう一度お試しください。" });
   }
