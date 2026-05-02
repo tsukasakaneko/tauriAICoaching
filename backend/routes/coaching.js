@@ -2,6 +2,7 @@
 
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const Anthropic = require("@anthropic-ai/sdk");
 const db = require("../db");
 
 const router = express.Router();
@@ -32,11 +33,115 @@ router.get("/me", requireAuth, (req, res) => {
   });
 });
 
-// POST /analyze — AI呼び出しはTauriコマンド (ai_analyze) に移管済み
-router.post("/analyze", (_req, res) => {
-  res.status(410).json({
-    message: "このエンドポイントは廃止されました。AI分析はデスクトップアプリ内部で処理されます。",
-  });
+// POST /analyze
+router.post("/analyze", requireAuth, async (req, res) => {
+  if (!req.user.is_paid) {
+    return res.status(403).json({ message: "この機能は有料会員限定です" });
+  }
+
+  const { rank, agent, selfAssessment, review } = req.body;
+
+  if (!rank || !agent) {
+    return res.status(400).json({ message: "ランクとエージェントは必須です" });
+  }
+
+  const assessmentText =
+    Array.isArray(selfAssessment) && selfAssessment.length > 0
+      ? selfAssessment.join("、")
+      : "特になし";
+
+  const systemPrompt = `あなたはValorantのプロコーチです。
+初心者〜中級者（ブロンズ〜プラチナ）に対して、具体的で実行可能な改善アドバイスを提供してください。
+抽象的な表現は禁止。必ず"行動レベル"に落としてください。
+
+以下のJSON形式のみで返答してください：
+
+{
+  "improvements": [
+    {
+      "title": "改善点のタイトル",
+      "description": "詳細な説明",
+      "cause": "問題の根本原因",
+      "actions": ["具体的なアクション1", "アクション2", "アクション3"]
+    }
+  ],
+  "training_plan": [
+    "Day1: 具体的なトレーニング内容",
+    "Day2: ...",
+    "Day3: ...",
+    "Day4: ...",
+    "Day5: ...",
+    "Day6: ...",
+    "Day7: ..."
+  ],
+  "summary": {
+    "strengths": "プレイヤーの強みの説明",
+    "weaknesses": "主な弱点の説明",
+    "focus": "最優先で取り組むべき課題"
+  }
+}`;
+
+  const userPrompt = `プレイヤー情報:
+- ランク: ${rank}
+- エージェント: ${agent}
+- 自己評価の課題: ${assessmentText}
+- プレイ振り返り: ${review || "特になし"}
+
+上記の情報を基に、Valorantのコーチングレポートを生成してください。必ず有効なJSONのみを返してください。`;
+
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  try {
+    const response = await anthropic.messages.create({
+      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
+      max_tokens: 2000,
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: userPrompt }],
+    });
+
+    const content = response.content[0]?.text;
+    if (!content) throw new Error("Anthropic returned empty response");
+
+    const parsed = JSON.parse(content);
+
+    // Structural validation: ensure arrays/objects have the right shape
+    // so ReportScreen never calls .map() on a non-array
+    const isValidImprovement = (item) =>
+      item && typeof item === "object" &&
+      typeof item.title === "string" &&
+      typeof item.description === "string" &&
+      typeof item.cause === "string" &&
+      Array.isArray(item.actions) &&
+      item.actions.every((a) => typeof a === "string");
+
+    if (
+      !Array.isArray(parsed.improvements) ||
+      !parsed.improvements.every(isValidImprovement) ||
+      !Array.isArray(parsed.training_plan) ||
+      !parsed.training_plan.every((d) => typeof d === "string") ||
+      !parsed.summary ||
+      typeof parsed.summary !== "object" ||
+      typeof parsed.summary.strengths !== "string" ||
+      typeof parsed.summary.weaknesses !== "string" ||
+      typeof parsed.summary.focus !== "string"
+    ) {
+      throw new Error("AI response failed structural validation");
+    }
+
+    res.json(parsed);
+  } catch (err) {
+    console.error("Analyze error:", err);
+    if (err.status === 401 || err.message?.includes("API key")) {
+      return res.status(500).json({ message: "Anthropic APIキーが正しく設定されていません" });
+    }
+    res.status(500).json({ message: "AI分析に失敗しました。もう一度お試しください。" });
+  }
 });
 
 module.exports = { router, requireAuth };
