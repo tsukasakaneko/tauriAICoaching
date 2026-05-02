@@ -23,4 +23,18 @@ db.exec(`
   )
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS match_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    started_at TEXT DEFAULT (datetime('now')),
+    match_started_at TEXT,
+    match_ended_at TEXT,
+    recording_path TEXT,
+    video_analysis_json TEXT,
+    status TEXT DEFAULT 'recording',
+    error_message TEXT
+  )
+`);
+
 module.exports = db;

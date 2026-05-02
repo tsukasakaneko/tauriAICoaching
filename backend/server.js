@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const authRoutes = require("./routes/auth");
 const { router: coachingRouter } = require("./routes/coaching");
+const { router: autoRecordRouter } = require("./routes/autorecord");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,6 +36,7 @@ app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
 app.use("/auth", authRoutes);
 app.use("/", coachingRouter);
+app.use("/", autoRecordRouter);
 
 app.use((_req, res) => res.status(404).json({ message: "Not found" }));
 
