@@ -1,9 +1,10 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, State};
 use tauri_plugin_store::StoreExt;
 
 use crate::ai_provider::{AiConfig, AiProviderType, CoachingReport};
 use crate::license::LicenseTier;
 use crate::prompt_builder::{AnalyzePayload, build_system_prompt, build_user_prompt};
+use crate::HttpClient;
 
 const STORE_PATH: &str = "settings.json";
 const KEY_AI_CONFIG: &str = "ai_config";
@@ -67,6 +68,7 @@ fn decrement_cloud_credits(app: &AppHandle) {
 #[tauri::command]
 pub async fn ai_analyze(
     app: AppHandle,
+    http: State<'_, HttpClient>,
     payload: AnalyzePayload,
 ) -> Result<CoachingReport, String> {
     let tier = get_license_tier(&app);
@@ -97,10 +99,10 @@ pub async fn ai_analyze(
         _ => {} // "pro" tier: no limits
     }
 
-    let system_prompt = build_system_prompt();
+    let system_prompt = build_system_prompt(&payload.agent, &payload.rank);
     let user_prompt = build_user_prompt(&payload);
 
-    let result = crate::ai_provider::call_ai(&config, &system_prompt, &user_prompt).await?;
+    let result = crate::ai_provider::call_ai(&http.0, &config, &system_prompt, &user_prompt).await?;
 
     // Deduct credits/count after successful call
     match tier.as_str() {

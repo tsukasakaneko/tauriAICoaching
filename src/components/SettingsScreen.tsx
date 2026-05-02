@@ -18,6 +18,8 @@ export default function SettingsScreen({ onBack }: Props) {
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
   const [licenseKey, setLicenseKey] = useState("");
   const [claudeKeyInput, setClaudeKeyInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [activating, setActivating] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
@@ -32,7 +34,13 @@ export default function SettingsScreen({ onBack }: Props) {
       setConfig(cfg);
       setLicenseStatus(lic);
       setUsageStatus(usage);
-    }).catch(console.error);
+    }).catch((err) => {
+      setLoadError(
+        err instanceof Error ? err.message : "設定の読み込みに失敗しました"
+      );
+    }).finally(() => {
+      setLoading(false);
+    });
   }, []);
 
   const flash = (msg: string, isError = false) => {
@@ -86,6 +94,32 @@ export default function SettingsScreen({ onBack }: Props) {
     if (tier === "cloud") return <span className="badge cloud">Cloud AI</span>;
     return <span className="badge free">無料</span>;
   };
+
+  if (loading) {
+    return (
+      <div className="screen settings-screen">
+        <div className="loading">設定を読み込み中...</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="screen settings-screen">
+        <header className="form-header">
+          <div className="brand-small">
+            <span className="brand-accent">VALORANT</span> 設定
+          </div>
+          <button className="logout-btn" onClick={onBack}>
+            ← 戻る
+          </button>
+        </header>
+        <p className="error" style={{ marginTop: "2rem" }}>
+          設定の読み込みに失敗しました: {loadError}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="screen settings-screen">

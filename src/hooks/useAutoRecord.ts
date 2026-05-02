@@ -22,10 +22,23 @@ const INITIAL_STATUS: AutoRecordStatus = {
   matchStartTime: null,
 };
 
+const MAX_RECONNECT_ATTEMPTS = 3;
+const RECONNECT_BASE_DELAY_MS = 2000;
+
 export function useAutoRecord() {
   const [status, setStatus] = useState<AutoRecordStatus>(INITIAL_STATUS);
   const [connected, setConnected] = useState(false);
   const esRef = useRef<EventSource | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intentionalStopRef = useRef(false);
+
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current !== null) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
 
   const connect = useCallback(() => {
     if (esRef.current) return;
@@ -35,6 +48,7 @@ export function useAutoRecord() {
 
     es.addEventListener("connected", (e) => {
       const data = JSON.parse((e as MessageEvent).data);
+      reconnectAttemptsRef.current = 0;
       setConnected(true);
       setStatus((prev) => ({
         ...prev,
@@ -99,25 +113,42 @@ export function useAutoRecord() {
           errorMessage: data.errorMessage ?? "不明なエラーが発生しました",
         }));
       } else {
-        // SSE connection error
+        // Network/connection error — attempt reconnect with exponential backoff
         setConnected(false);
         es.close();
         esRef.current = null;
+
+        if (
+          !intentionalStopRef.current &&
+          reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
+        ) {
+          const delay =
+            RECONNECT_BASE_DELAY_MS * Math.pow(2, reconnectAttemptsRef.current);
+          reconnectAttemptsRef.current += 1;
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null;
+            connect();
+          }, delay);
+        }
       }
     });
 
     es.addEventListener("heartbeat", () => {
       // Keep-alive — no state update needed
     });
-  }, []);
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const disconnect = useCallback(() => {
+    intentionalStopRef.current = true;
+    clearReconnectTimer();
+    reconnectAttemptsRef.current = 0;
     esRef.current?.close();
     esRef.current = null;
     setConnected(false);
-  }, []);
+  }, [clearReconnectTimer]);
 
   const startMonitoring = useCallback(async () => {
+    intentionalStopRef.current = false;
     connect();
     await api.startMonitoring();
   }, [connect]);
@@ -134,10 +165,12 @@ export function useAutoRecord() {
 
   useEffect(() => {
     return () => {
+      intentionalStopRef.current = true;
+      clearReconnectTimer();
       esRef.current?.close();
       esRef.current = null;
     };
-  }, []);
+  }, [clearReconnectTimer]);
 
   return {
     status,
