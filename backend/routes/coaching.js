@@ -7,6 +7,28 @@ const db = require("../db");
 
 const router = express.Router();
 
+// Singleton Anthropic client — created once, reused for every request
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// Per-user daily rate limit (in-memory; resets naturally at process restart / midnight rollover)
+// Free users: 3/day  Paid users: 20/day
+const DAILY_LIMIT_FREE = 3;
+const DAILY_LIMIT_PAID = 20;
+const _dailyUsage = new Map(); // userId → { date: string, count: number }
+
+function checkDailyLimit(userId, isPaid) {
+  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  const entry = _dailyUsage.get(userId);
+  if (!entry || entry.date !== today) {
+    _dailyUsage.set(userId, { date: today, count: 0 });
+  }
+  const rec = _dailyUsage.get(userId);
+  const limit = isPaid ? DAILY_LIMIT_PAID : DAILY_LIMIT_FREE;
+  if (rec.count >= limit) return false;
+  rec.count += 1;
+  return true;
+}
+
 function requireAuth(req, res, next) {
   const authHeader = req.headers["authorization"];
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -35,8 +57,11 @@ router.get("/me", requireAuth, (req, res) => {
 
 // POST /analyze
 router.post("/analyze", requireAuth, async (req, res) => {
-  if (!req.user.is_paid) {
-    return res.status(403).json({ message: "この機能は有料会員限定です" });
+  if (!checkDailyLimit(req.user.id, req.user.is_paid === 1)) {
+    const limit = req.user.is_paid === 1 ? DAILY_LIMIT_PAID : DAILY_LIMIT_FREE;
+    return res.status(429).json({
+      message: `1日の分析回数上限（${limit}回）に達しました。明日またお試しください。`,
+    });
   }
 
   const { rank, agent, selfAssessment, review } = req.body;
@@ -88,8 +113,6 @@ router.post("/analyze", requireAuth, async (req, res) => {
 - プレイ振り返り: ${review || "特になし"}
 
 上記の情報を基に、Valorantのコーチングレポートを生成してください。必ず有効なJSONのみを返してください。`;
-
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   try {
     const response = await anthropic.messages.create({

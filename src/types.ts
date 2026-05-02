@@ -97,6 +97,7 @@ export interface LicenseStatus {
   tier: "free" | "pro" | "cloud";
   cloud_credits: number;
   has_key: boolean;
+  cloud_expires_at?: string; // "YYYY-MM" for CloudMonthly subscriptions
 }
 
 export interface UsageStatus {

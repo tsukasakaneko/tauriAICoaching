@@ -392,6 +392,12 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
   padding: 0.3rem 0;
 }
 
+.expiry-date {
+  font-family: monospace;
+  letter-spacing: 0.05em;
+  color: var(--warning);
+}
+
 .key-input-row {
   display: flex;
   gap: 0.5rem;

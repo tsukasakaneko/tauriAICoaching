@@ -15,6 +15,7 @@ pub struct LicenseStatus {
     pub tier: String,
     pub cloud_credits: i64,
     pub has_key: bool,
+    pub cloud_expires_at: Option<String>, // "YYYY-MM" for CloudMonthly, None otherwise
 }
 
 #[tauri::command]
@@ -30,8 +31,15 @@ pub fn activate_license(app: AppHandle, key: String) -> Result<LicenseStatus, St
             store.set(KEY_LICENSE_KEY, serde_json::json!(key));
         }
         LicenseTier::CloudMonthly { .. } => {
+            // Prevent re-activating the identical key to reset credits every time.
+            // A legitimate renewal uses a new key for the next billing month.
+            let current_key = store.get(KEY_LICENSE_KEY)
+                .and_then(|v| v.as_str().map(|s| s.to_string()));
+            if current_key.as_deref() == Some(&info.raw_key) {
+                return Err("このVCLOUDキーは既にアクティベート済みです。翌月分のキーを使用してください。".to_string());
+            }
             store.set(KEY_LICENSE_TIER, serde_json::json!("cloud"));
-            store.set(KEY_LICENSE_KEY, serde_json::json!(key));
+            store.set(KEY_LICENSE_KEY, serde_json::json!(&info.raw_key));
             // Add monthly credits (replace, not accumulate, for subscription renewals)
             store.set(KEY_CLOUD_CREDITS, serde_json::json!(CLOUD_MONTHLY_CREDITS));
         }
@@ -87,7 +95,18 @@ fn build_license_status(store: &tauri_plugin_store::Store<tauri::Wry>) -> Licens
     let cloud_credits = store.get(KEY_CLOUD_CREDITS)
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
-    let has_key = store.get(KEY_LICENSE_KEY).is_some();
+    let raw_key = store.get(KEY_LICENSE_KEY)
+        .and_then(|v| v.as_str().map(|s| s.to_string()));
+    let has_key = raw_key.is_some();
 
-    LicenseStatus { tier, cloud_credits, has_key }
+    // Derive expiry display string from the stored VCLOUD key
+    let cloud_expires_at = if tier == "cloud" {
+        raw_key.as_deref()
+            .and_then(crate::license::get_cloud_expiry)
+            .map(|(year, month)| format!("{}-{:02}", 2020i32 + year as i32, month))
+    } else {
+        None
+    };
+
+    LicenseStatus { tier, cloud_credits, has_key, cloud_expires_at }
 }

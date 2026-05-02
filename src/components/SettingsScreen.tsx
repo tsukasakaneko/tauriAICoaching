@@ -150,6 +150,12 @@ export default function SettingsScreen({ onBack }: Props) {
                   <strong>{licenseStatus.cloud_credits} 回</strong>
                 </div>
               )}
+              {licenseStatus.tier === "cloud" && licenseStatus.cloud_expires_at && (
+                <div className="license-row">
+                  <span>サブスクリプション期限</span>
+                  <strong className="expiry-date">{licenseStatus.cloud_expires_at}</strong>
+                </div>
+              )}
               {usageStatus && licenseStatus.tier === "free" && (
                 <div className="license-row">
                   <span>無料分析残り</span>

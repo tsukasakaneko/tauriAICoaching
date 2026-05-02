@@ -3,8 +3,12 @@ use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
-// Change this secret in production builds.
-const HMAC_SECRET: &[u8] = b"v4lor4nt-c04ch1ng-hmac-k3y-ch4ng3-1n-pr0d!";
+// Injected at compile time via LICENSE_HMAC_SECRET env var.
+// Falls back to a dev-only placeholder; production builds MUST set the env var.
+const HMAC_SECRET: &[u8] = match option_env!("LICENSE_HMAC_SECRET") {
+    Some(s) => s.as_bytes(),
+    None => b"dev-only-insecure-secret-not-for-production",
+};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type")]
@@ -86,6 +90,31 @@ pub fn validate_key(key: &str) -> Result<LicenseInfo, String> {
         nonce,
         raw_key: key.to_string(),
     })
+}
+
+/// Returns `(expiry_year_since_2020, expiry_month)` for a CloudMonthly key, or `None`
+/// for keys with no expiry or if the key cannot be parsed.
+pub fn get_cloud_expiry(raw_key: &str) -> Option<(u8, u8)> {
+    let key = raw_key.trim().to_uppercase();
+    let parts: Vec<&str> = key.split('-').collect();
+    if parts.len() < 3 { return None; }
+    let hex_body: String = parts[1..].join("");
+    if hex_body.len() != 16 { return None; }
+    let Ok(body_bytes) = hex::decode(&hex_body) else { return None; };
+    if body_bytes[0] != 0x02 { return None; } // Not a CloudMonthly key
+    let expiry_year = body_bytes[1];
+    let expiry_month = body_bytes[2];
+    if expiry_year == 0xFF { return None; } // Permanent — no expiry
+    Some((expiry_year, expiry_month))
+}
+
+/// Returns `true` if a stored CloudMonthly raw key has passed its expiry month.
+/// Non-cloud keys always return `false` (they don't expire this way).
+pub fn cloud_subscription_expired(raw_key: &str) -> bool {
+    match get_cloud_expiry(raw_key) {
+        Some((year, month)) => is_expired(year, month),
+        None => false,
+    }
 }
 
 fn is_expired(expiry_year_since_2020: u8, expiry_month: u8) -> bool {

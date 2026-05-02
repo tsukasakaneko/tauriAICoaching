@@ -95,6 +95,25 @@ pub async fn ai_analyze(
             }
         }
         "cloud" => {
+            // Re-validate CloudMonthly subscription expiry on every analysis.
+            // Activation-time check alone is insufficient — the subscription may have
+            // expired since the key was first entered.
+            if let Ok(store) = app.store(STORE_PATH) {
+                let stored_key = store.get(KEY_LICENSE_KEY)
+                    .and_then(|v| v.as_str().map(|s| s.to_string()));
+                if let Some(raw_key) = stored_key {
+                    if crate::license::cloud_subscription_expired(&raw_key) {
+                        store.set(KEY_LICENSE_TIER, serde_json::json!("free"));
+                        store.set(KEY_CLOUD_CREDITS, serde_json::json!(0i64));
+                        let _ = store.save();
+                        return Err(
+                            "VCLOUDサブスクリプションの有効期限が切れました。新しいVCLOUDキーを入力してください。"
+                                .to_string(),
+                        );
+                    }
+                }
+            }
+
             if config.provider == AiProviderType::Cloud {
                 let credits = get_cloud_credits(&app);
                 if credits <= 0 {
