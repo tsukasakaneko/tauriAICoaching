@@ -72,11 +72,21 @@ tips = [
 ]
 
 [ranks]
+[ranks.Iron]
+calibration = "まず動作の正確さを最優先。クロスヘア配置を常に頭の高さに合わせる、移動撃ちをしない、スパイクサイトのルートを2〜3本覚えること。戦略より反射と基礎を固める。"
 [ranks.Bronze]
-calibration = "Focus on fundamentals: crosshair placement, one-tapping, buying properly. Avoid complex strategies."
+calibration = "基礎を固めながら死因の分析を始める。なぜ撃ち負けたかを毎ラウンド振り返り、クロスヘア配置と1点集中のエイム練習を継続する。購入ルールも徹底する。"
 [ranks.Silver]
-calibration = "Add movement discipline and basic utility usage. Avoid shooting while moving."
+calibration = "移動の規律とユーティリティの基本的な使い方を加える。移動撃ちの禁止を徹底し、スモークやフラッシュを毎ラウンド1つは有効活用することを目標にする。"
 [ranks.Gold]
-calibration = "Introduce eco management, spike plant timing, and team coordination. Punish mistakes."
+calibration = "エコ管理・スパイクプラントのタイミング・チーム連携を意識する。相手のミスを見逃さずプレッシャーをかけ、半バイの判断精度を上げる。"
 [ranks.Platinum]
-calibration = "Focus on map control, proactive utility, off-angles, and counter-strafing mechanics."
+calibration = "マップコントロール・積極的なユーティリティ先出し・オフアングル・カウンターストレーフを磨く。情報の先取りと情報売りの判断が順位を決める帯域。"
+[ranks.Diamond]
+calibration = "マクロゲームと情報戦が鍵。ユーティリティのタイミング・オフアングルの多様化・リテイクルートを精度高く実行する。個人技に加えてゲームリードの能力が差を生む。"
+[ranks.Ascendant]
+calibration = "個人技は高水準。ラインとペーキング精度・クラッチ判断・心理戦で差がつく帯域。メタへの柔軟な適応と読み合いが重要。"
+[ranks.Immortal]
+calibration = "判断速度と精神的安定性が最重要。ゲームリードと個人技の両立が求められる。ティルトコントロールと集中力の持続が順位を決める。"
+[ranks.Radiant]
+calibration = "環境トップレベル。メタ読み・心理戦・フィジカル維持のすべてが必要。コミュニケーション精度とメンタルマネジメントが最大の差別化要因。"

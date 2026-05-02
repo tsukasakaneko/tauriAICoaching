@@ -71,10 +71,15 @@ fn get_knowledge_base() -> &'static KnowledgeBase {
 
 fn rank_to_english(rank: &str) -> &str {
     match rank {
-        "ブロンズ" => "Bronze",
-        "シルバー" => "Silver",
-        "ゴールド" => "Gold",
-        "プラチナ" => "Platinum",
+        "アイアン"     => "Iron",
+        "ブロンズ"     => "Bronze",
+        "シルバー"     => "Silver",
+        "ゴールド"     => "Gold",
+        "プラチナ"     => "Platinum",
+        "ダイヤモンド" => "Diamond",
+        "アセンダント" => "Ascendant",
+        "イモータル"   => "Immortal",
+        "レディアント" => "Radiant",
         _ => rank,
     }
 }

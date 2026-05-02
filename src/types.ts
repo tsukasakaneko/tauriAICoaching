@@ -6,7 +6,16 @@ export interface User {
   isPaid: boolean;
 }
 
-export type Rank = "ブロンズ" | "シルバー" | "ゴールド" | "プラチナ";
+export type Rank =
+  | "アイアン"
+  | "ブロンズ"
+  | "シルバー"
+  | "ゴールド"
+  | "プラチナ"
+  | "ダイヤモンド"
+  | "アセンダント"
+  | "イモータル"
+  | "レディアント";
 
 export type SelfAssessmentItem =
   | "エイム弱い"

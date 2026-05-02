@@ -447,6 +447,65 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
 }
 .user-info { display: flex; align-items: center; gap: 0.6rem; }
 .user-email { color: var(--text-muted); font-size: 0.85rem; }
+
+/* ---- Usage badge ---- */
+.usage-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.usage-badge.usage-warn {
+  background: rgba(255, 152, 0, 0.12);
+  border-color: var(--warning);
+  color: var(--warning);
+}
+.usage-badge.usage-empty {
+  background: rgba(255, 107, 107, 0.12);
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* ---- Analysis progress ---- */
+.analysis-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  animation: fadeIn 0.25s ease;
+}
+.analysis-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.analysis-step-text {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.analysis-time {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(0.75); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .form-title {
   font-size: 1.3rem;
   margin-bottom: 1.5rem;
