@@ -89,17 +89,10 @@ pub fn validate_key(key: &str) -> Result<LicenseInfo, String> {
 }
 
 fn is_expired(expiry_year_since_2020: u8, expiry_month: u8) -> bool {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    // Approximate: seconds since epoch to year/month
-    let days = now / 86400;
-    let approx_year = 1970 + days / 365;
-    let approx_month = ((days % 365) / 30) + 1;
-
-    let key_year = 2020u64 + expiry_year_since_2020 as u64;
-    let key_month = expiry_month as u64;
-
-    approx_year > key_year || (approx_year == key_year && approx_month > key_month)
+    use chrono::{Datelike, Local};
+    let now = Local::now();
+    let key_year = 2020i32 + expiry_year_since_2020 as i32;
+    let key_month = expiry_month as u32;
+    // Key is valid through the end of key_month; expired when current month is past it
+    now.year() > key_year || (now.year() == key_year && now.month() > key_month)
 }

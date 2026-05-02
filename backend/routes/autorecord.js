@@ -65,8 +65,12 @@ screenMonitor.on('stateChanged', (newState, _prev) => {
 });
 
 screenMonitor.on('matchStarted', () => {
+  // Start the recorder ONCE per match (singleton — same path returned if already recording)
+  const recordingPath = screenRecorder.start('shared');
+  const matchStartTime = new Date().toISOString();
+
   for (const [userId] of sseClients) {
-    const recordingPath = screenRecorder.start(String(userId));
+    // Create a DB session per user that all point to the same recording file
     const session = db.prepare(
       `INSERT INTO match_sessions (user_id, match_started_at, recording_path, status)
        VALUES (?, datetime('now'), ?, 'recording')`
@@ -75,7 +79,7 @@ screenMonitor.on('matchStarted', () => {
     activeSessions.set(userId, { sessionId: session.lastInsertRowid, recordingPath });
     broadcast(userId, 'recording_started', {
       state: 'match_active',
-      matchStartTime: new Date().toISOString(),
+      matchStartTime,
       sessionId: session.lastInsertRowid,
     });
   }
@@ -84,40 +88,46 @@ screenMonitor.on('matchStarted', () => {
 screenMonitor.on('resultScreenDetected', async () => {
   const videoPath = await screenRecorder.stop();
 
-  for (const [userId] of sseClients) {
-    const session = activeSessions.get(userId);
-    if (!session) continue;
+  // Collect users who have an active session before starting async work
+  const activeUsers = [...sseClients.keys()].filter(uid => activeSessions.has(uid));
 
-    db.prepare(
-      `UPDATE match_sessions SET match_ended_at = datetime('now'), status = 'analyzing'
-       WHERE id = ?`
-    ).run(session.sessionId);
-
-    broadcast(userId, 'state_change', { state: 'analyzing', timestamp: new Date().toISOString() });
-
-    // Run analysis asynchronously
-    analyzeVideo(videoPath, (prog) => {
+  // Analyze the video ONCE, then fan out results to each user
+  const broadcastProgress = (prog) => {
+    for (const userId of activeUsers) {
       broadcast(userId, 'analysis_progress', { ...prog, timestamp: new Date().toISOString() });
-    }).then((videoAnalysis) => {
+    }
+  };
+
+  for (const userId of activeUsers) {
+    broadcast(userId, 'state_change', { state: 'analyzing', timestamp: new Date().toISOString() });
+    db.prepare(
+      `UPDATE match_sessions SET match_ended_at = datetime('now'), status = 'analyzing' WHERE id = ?`
+    ).run(activeSessions.get(userId).sessionId);
+  }
+
+  try {
+    const videoAnalysis = await analyzeVideo(videoPath, broadcastProgress);
+
+    for (const userId of activeUsers) {
+      const session = activeSessions.get(userId);
+      if (!session) continue;
       db.prepare(
         `UPDATE match_sessions SET video_analysis_json = ?, status = 'done' WHERE id = ?`
       ).run(JSON.stringify(videoAnalysis), session.sessionId);
-
-      broadcast(userId, 'form_ready', {
-        state: 'done',
-        videoAnalysis,
-        timestamp: new Date().toISOString(),
-      });
+      broadcast(userId, 'form_ready', { state: 'done', videoAnalysis, timestamp: new Date().toISOString() });
       activeSessions.delete(userId);
-    }).catch((err) => {
-      console.error('[autorecord] analysis error:', err);
+    }
+  } catch (err) {
+    console.error('[autorecord] analysis error:', err);
+    for (const userId of activeUsers) {
+      const session = activeSessions.get(userId);
+      if (!session) continue;
       db.prepare(
         `UPDATE match_sessions SET status = 'error', error_message = ? WHERE id = ?`
       ).run(err.message, session.sessionId);
-
       broadcast(userId, 'error', { state: 'error', errorMessage: err.message });
       activeSessions.delete(userId);
-    });
+    }
   }
 });
 

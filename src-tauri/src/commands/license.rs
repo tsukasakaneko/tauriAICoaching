@@ -38,7 +38,6 @@ pub fn activate_license(app: AppHandle, key: String) -> Result<LicenseStatus, St
         LicenseTier::Credit10 | LicenseTier::Credit30 => {
             // Prevent reuse: check nonce
             let nonce = info.nonce;
-            let nonce_key = format!("nonce_{}", nonce);
             let used_nonces: Vec<u8> = store.get(KEY_USED_CREDIT_NONCES)
                 .and_then(|v| serde_json::from_value(v).ok())
                 .unwrap_or_default();
@@ -52,6 +51,14 @@ pub fn activate_license(app: AppHandle, key: String) -> Result<LicenseStatus, St
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0);
             store.set(KEY_CLOUD_CREDITS, serde_json::json!(current + add));
+
+            // Upgrade tier to 'cloud' if not already — credits are only usable under cloud tier
+            let current_tier = store.get(KEY_LICENSE_TIER)
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+                .unwrap_or_else(|| "free".to_string());
+            if current_tier != "cloud" {
+                store.set(KEY_LICENSE_TIER, serde_json::json!("cloud"));
+            }
 
             // Mark nonce as used
             let mut updated_nonces = used_nonces;
