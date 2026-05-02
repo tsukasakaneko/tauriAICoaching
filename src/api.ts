@@ -1,4 +1,14 @@
-import type { AuthResponse, CoachingFormData, CoachingReport, User } from "./types";
+import { invoke } from "@tauri-apps/api/core";
+import type {
+  AuthResponse,
+  CoachingFormData,
+  CoachingReport,
+  User,
+  VideoAnalysisResult,
+  AiConfig,
+  LicenseStatus,
+  UsageStatus,
+} from "./types";
 
 const BASE_URL = "http://127.0.0.1:3001";
 
@@ -46,9 +56,52 @@ export const api = {
 
   getMe: () => request<User>("/me"),
 
-  analyze: (data: CoachingFormData) =>
-    request<CoachingReport>("/analyze", {
-      method: "POST",
-      body: JSON.stringify(data),
+  // Auto-record endpoints
+  startMonitoring: () =>
+    request<{ ok: boolean; state: string }>("/autorecord/start", { method: "POST" }),
+
+  stopMonitoring: () =>
+    request<{ ok: boolean }>("/autorecord/stop", { method: "POST" }),
+
+  getRecordState: () =>
+    request<{ state: string; isRecording: boolean }>("/autorecord/state"),
+
+  getLatestAnalysis: () =>
+    request<VideoAnalysisResult | null>("/autorecord/latest"),
+
+  // SSE factory — EventSource needs the token as a query param
+  createRecordingEventSource: (): EventSource => {
+    const token = getToken() ?? "";
+    return new EventSource(`${BASE_URL}/autorecord/status?token=${encodeURIComponent(token)}`);
+  },
+};
+
+// ─── Tauri command wrappers ───────────────────────────────────────────────────
+
+export const tauriApi = {
+  analyze: (
+    formData: CoachingFormData,
+    videoAnalysis: VideoAnalysisResult | null
+  ): Promise<CoachingReport> =>
+    invoke<CoachingReport>("ai_analyze", {
+      payload: {
+        rank: formData.rank,
+        agent: formData.agent,
+        selfAssessment: formData.selfAssessment,
+        review: formData.review,
+        videoAnalysis: videoAnalysis ?? null,
+      },
     }),
+
+  getAiConfig: (): Promise<AiConfig> => invoke<AiConfig>("get_ai_config"),
+
+  setAiConfig: (config: AiConfig): Promise<void> =>
+    invoke<void>("set_ai_config", { config }),
+
+  getUsageStatus: (): Promise<UsageStatus> => invoke<UsageStatus>("get_usage_status"),
+
+  activateLicense: (key: string): Promise<LicenseStatus> =>
+    invoke<LicenseStatus>("activate_license", { key }),
+
+  getLicenseStatus: (): Promise<LicenseStatus> => invoke<LicenseStatus>("get_license_status"),
 };

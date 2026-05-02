@@ -4,6 +4,11 @@
   "description": "Default capabilities for valorant-ai-coaching",
   "windows": ["main"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-save",
+    "store:allow-load",
+    "store:allow-delete"
   ]
 }

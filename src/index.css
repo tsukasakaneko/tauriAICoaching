@@ -176,8 +176,247 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
   font-size: 0.75rem;
   font-weight: 700;
 }
-.badge.paid { background: var(--success); color: white; }
-.badge.free { background: var(--border); color: var(--text-muted); }
+.badge.paid   { background: var(--success); color: white; }
+.badge.cloud  { background: #2563eb; color: white; }
+.badge.free   { background: var(--border); color: var(--text-muted); }
+
+/* ---- Icon button ---- */
+.icon-btn {
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+.icon-btn:hover { color: var(--text); border-color: var(--accent); }
+
+/* ---- Auto-record CTA ---- */
+.autorecord-cta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.autorecord-cta:hover { background: var(--surface-hover); }
+.cta-icon { font-size: 1.8rem; flex-shrink: 0; }
+.autorecord-cta > div { flex: 1; }
+.autorecord-cta strong { display: block; margin-bottom: 0.2rem; }
+.autorecord-cta p { font-size: 0.82rem; color: var(--text-muted); margin: 0; }
+.cta-arrow { color: var(--accent); font-size: 1.2rem; }
+
+/* ---- Video analysis badge ---- */
+.video-analysis-badge {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--success);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+  color: var(--success);
+  font-size: 0.9rem;
+}
+.badge-detail { color: var(--text-muted); font-size: 0.82rem; }
+
+/* ---- AutoRecordScreen ---- */
+.autorecord-screen { max-width: 700px; }
+.autorecord-body { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; padding-top: 1.5rem; }
+
+.connection-badge {
+  padding: 0.35rem 0.9rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.connection-badge.connected   { background: rgba(76, 175, 80, 0.15); color: var(--success); }
+.connection-badge.disconnected { background: var(--surface); color: var(--text-muted); }
+
+.step-indicator {
+  display: flex;
+  gap: 0;
+  width: 100%;
+}
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: relative;
+}
+.step-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: calc(50% + 12px);
+  right: calc(-50% + 12px);
+  height: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+.step-item.completed::after { background: var(--success); }
+.step-item.active::after { background: var(--accent); }
+
+.step-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  z-index: 1;
+  background: var(--border);
+  color: var(--text-muted);
+}
+.step-item.completed .step-dot { background: var(--success); color: white; }
+.step-item.active .step-dot { background: var(--accent); color: white; }
+.step-label { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.3rem; text-align: center; }
+.step-item.active .step-label { color: var(--text); }
+
+.record-status {
+  text-align: center;
+  width: 100%;
+}
+.status-label { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+
+.recording-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 70, 85, 0.12);
+  color: var(--accent);
+  border-radius: 20px;
+  padding: 0.3rem 0.8rem;
+  font-family: monospace;
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
+}
+.rec-dot { animation: blink 1s step-end infinite; }
+@keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+
+.progress-bar-wrap {
+  position: relative;
+  width: 100%;
+  background: var(--surface);
+  border-radius: 6px;
+  height: 28px;
+  margin-top: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.progress-bar-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--accent), #ff8a9a);
+  transition: width 0.4s ease;
+  border-radius: 6px;
+}
+.progress-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.autorecord-hint {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  width: 100%;
+  line-height: 1.7;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.stop-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 0.5rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+.stop-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---- SettingsScreen ---- */
+.settings-screen { max-width: 700px; }
+.settings-body { display: flex; flex-direction: column; gap: 1.5rem; }
+.settings-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem;
+}
+.settings-section h3 {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.settings-section .primary-btn {
+  width: auto;
+  margin-top: 1.25rem;
+  padding: 0.6rem 1.5rem;
+}
+
+.license-status {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+.license-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.3rem 0;
+}
+
+.key-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+.key-input { flex: 1; font-family: monospace; letter-spacing: 0.05em; }
+.key-input-row .primary-btn { width: auto; margin-top: 0; white-space: nowrap; }
+
+.hint-text { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.4rem; }
+
+.radio-group { display: flex; flex-direction: column; gap: 0.5rem; }
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.6rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.radio-label:hover { border-color: var(--accent); }
+.radio-label input { accent-color: var(--accent); }
+
+.success-msg { color: var(--success); margin-top: 0.5rem; font-size: 0.9rem; }
 
 /* ---- Messages ---- */
 .error {

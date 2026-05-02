@@ -1,0 +1,82 @@
+# Valorant agent knowledge base
+# Used by the AI harness for context injection
+
+[agents.Jett]
+role = "Duelist"
+abilities = ["Tailwind (Dash)", "Cloudburst (Smoke)", "Updraft", "Blade Storm (Ult)"]
+playstyle = "High-mobility fragmentation. Entry-frag oriented."
+tips = [
+  "Use dash to disengage, not just to peek",
+  "Tailwind resets on kills — exploit this for multi-kills",
+  "Blade Storm knives are silent — use in Pistol round",
+]
+
+[agents.Sage]
+role = "Sentinel"
+abilities = ["Slow Orb", "Barrier Orb", "Heal", "Resurrection (Ult)"]
+playstyle = "Support and anchoring. Should not solo-push."
+tips = [
+  "Heal teammates proactively between rounds, not only in firefights",
+  "Barrier Orb can block entire corridors — learn site-specific placements",
+  "Resurrection timing is critical — wait for enemies to commit before using",
+]
+
+[agents.Reyna]
+role = "Duelist"
+abilities = ["Leer (Nearsight)", "Dismiss (Invulnerability)", "Devour (Heal)", "Empress (Ult)"]
+playstyle = "Snowball-reliant. Very weak when behind, extremely strong when ahead."
+tips = [
+  "Leer before peeking, not after",
+  "Dismiss is an escape tool — always have an exit plan",
+  "Do not use Devour when enemies are still alive nearby",
+]
+
+[agents.Sova]
+role = "Initiator"
+abilities = ["Recon Bolt", "Shock Bolt", "Owl Drone", "Hunter's Fury (Ult)"]
+playstyle = "Information gathering. Enables team pushes with intel."
+tips = [
+  "Learn at least 3 Recon Bolt lineups per map before ranked",
+  "Shock Bolt combo with Recon to force enemies off angles",
+  "Owl Drone is expendable — use it to get info before pushing",
+]
+
+[agents.Killjoy]
+role = "Sentinel"
+abilities = ["Nanoswarm", "Alarmbot", "Turret", "Lockdown (Ult)"]
+playstyle = "Site anchoring and post-plant. Strong defender."
+tips = [
+  "Place Alarmbot + Turret together for maximum deterrence",
+  "Nanoswarm under spike after planting — don't activate immediately",
+  "Lockdown forces enemies to reposition — use it to retake",
+]
+
+[agents.Brimstone]
+role = "Controller"
+abilities = ["Incendiary", "Sky Smoke", "Stim Beacon", "Orbital Strike (Ult)"]
+playstyle = "Structured smoke controller. Calls for team discipline."
+tips = [
+  "Pre-plan 3-smoke executes with your team every round",
+  "Stim Beacon for entry-frag teammates pushing in",
+  "Incendiary is great for post-plant — cover multiple defuse angles",
+]
+
+[agents.Phoenix]
+role = "Duelist"
+abilities = ["Blaze", "Curveball", "Hot Hands", "Run It Back (Ult)"]
+playstyle = "Self-sufficient duelist. Can heal off own fires."
+tips = [
+  "Curveball flash from unexpected angles, not predictable corners",
+  "Use Blaze wall to cut site into smaller duels",
+  "Run It Back is a scouting tool — use it aggressively to gather info",
+]
+
+[ranks]
+[ranks.Bronze]
+calibration = "Focus on fundamentals: crosshair placement, one-tapping, buying properly. Avoid complex strategies."
+[ranks.Silver]
+calibration = "Add movement discipline and basic utility usage. Avoid shooting while moving."
+[ranks.Gold]
+calibration = "Introduce eco management, spike plant timing, and team coordination. Punish mistakes."
+[ranks.Platinum]
+calibration = "Focus on map control, proactive utility, off-angles, and counter-strafing mechanics."

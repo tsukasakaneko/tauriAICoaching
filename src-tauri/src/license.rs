@@ -1,0 +1,105 @@
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
+
+// Change this secret in production builds.
+const HMAC_SECRET: &[u8] = b"v4lor4nt-c04ch1ng-hmac-k3y-ch4ng3-1n-pr0d!";
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type")]
+pub enum LicenseTier {
+    ProLifetime,
+    CloudMonthly { expiry_year: u8, expiry_month: u8 },
+    Credit10,
+    Credit30,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct LicenseInfo {
+    pub tier: LicenseTier,
+    pub nonce: u8,
+    pub raw_key: String,
+}
+
+// Key format: {PREFIX}-{XXXXXXXX}-{XXXXXXXX}
+// 16 hex chars total = 8 bytes:
+//   [0]    tier code (0x01=pro_lifetime, 0x02=cloud_monthly, 0x03=credit_10, 0x04=credit_30)
+//   [1]    expiry_year since 2020 (0xFF = no expiry)
+//   [2]    expiry_month 1-12 (0xFF = no expiry)
+//   [3]    nonce (random byte for uniqueness)
+//   [4..8] first 4 bytes of HMAC-SHA256(secret, bytes[0..4])
+//
+// Prefixes: VCOACH (0x01), VCLOUD (0x02), VCREDIT (0x03/0x04)
+pub fn validate_key(key: &str) -> Result<LicenseInfo, String> {
+    let key = key.trim().to_uppercase();
+    let parts: Vec<&str> = key.split('-').collect();
+
+    if parts.len() < 3 {
+        return Err("キーの形式が正しくありません".to_string());
+    }
+
+    let prefix = parts[0];
+    let hex_body: String = parts[1..].join("");
+
+    if hex_body.len() != 16 {
+        return Err("キーの長さが正しくありません".to_string());
+    }
+
+    let body_bytes = hex::decode(&hex_body)
+        .map_err(|_| "キーに無効な文字が含まれています".to_string())?;
+
+    let tier_code = body_bytes[0];
+    let expiry_year = body_bytes[1];
+    let expiry_month = body_bytes[2];
+    let nonce = body_bytes[3];
+    let sig_given = &body_bytes[4..8];
+
+    // Verify HMAC signature
+    let mut mac = HmacSha256::new_from_slice(HMAC_SECRET)
+        .map_err(|_| "内部エラー: HMAC初期化失敗".to_string())?;
+    mac.update(&body_bytes[0..4]);
+    let sig_computed = mac.finalize().into_bytes();
+
+    if sig_computed[0..4] != *sig_given {
+        return Err("キーが無効です".to_string());
+    }
+
+    // Verify prefix matches tier code
+    let tier = match (tier_code, prefix) {
+        (0x01, "VCOACH") => LicenseTier::ProLifetime,
+        (0x02, "VCLOUD") => {
+            if expiry_year != 0xFF && expiry_month != 0xFF {
+                if is_expired(expiry_year, expiry_month) {
+                    return Err("このキーは有効期限切れです".to_string());
+                }
+            }
+            LicenseTier::CloudMonthly { expiry_year, expiry_month }
+        }
+        (0x03, "VCREDIT") => LicenseTier::Credit10,
+        (0x04, "VCREDIT") => LicenseTier::Credit30,
+        _ => return Err("キーの形式が正しくありません".to_string()),
+    };
+
+    Ok(LicenseInfo {
+        tier,
+        nonce,
+        raw_key: key.to_string(),
+    })
+}
+
+fn is_expired(expiry_year_since_2020: u8, expiry_month: u8) -> bool {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    // Approximate: seconds since epoch to year/month
+    let days = now / 86400;
+    let approx_year = 1970 + days / 365;
+    let approx_month = ((days % 365) / 30) + 1;
+
+    let key_year = 2020u64 + expiry_year_since_2020 as u64;
+    let key_month = expiry_month as u64;
+
+    approx_year > key_year || (approx_year == key_year && approx_month > key_month)
+}
