@@ -172,13 +172,17 @@ router.get('/autorecord/status', (req, res) => {
 
   req.on('close', () => {
     clearInterval(heartbeat);
-    sseClients.get(user.id)?.delete(res);
+    const clients = sseClients.get(user.id);
+    if (clients) {
+      clients.delete(res);
+      if (clients.size === 0) sseClients.delete(user.id);
+    }
   });
 });
 
 // Start monitoring
 router.post('/autorecord/start', requireAuth, (req, res) => {
-  if (screenMonitor.state !== 'idle' && screenMonitor._running) {
+  if (screenMonitor.state !== 'idle' && screenMonitor.isRunning) {
     return res.json({ ok: true, state: screenMonitor.state, message: '既に監視中です' });
   }
   screenMonitor.start();

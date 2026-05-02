@@ -199,8 +199,21 @@ async fn call_ollama(
     Ok(ollama_resp.message.content)
 }
 
+fn strip_code_fences(raw: &str) -> &str {
+    let s = raw.trim();
+    // Claude sometimes wraps JSON in ```json ... ``` or ``` ... ``` fences
+    if let Some(inner) = s.strip_prefix("```json") {
+        inner.trim_start_matches('\n').trim_end_matches("```").trim()
+    } else if let Some(inner) = s.strip_prefix("```") {
+        inner.trim_start_matches('\n').trim_end_matches("```").trim()
+    } else {
+        s
+    }
+}
+
 fn parse_and_validate(raw: String) -> Result<CoachingReport, String> {
-    let parsed: serde_json::Value = serde_json::from_str(&raw)
+    let clean = strip_code_fences(&raw);
+    let parsed: serde_json::Value = serde_json::from_str(clean)
         .map_err(|_| "AIのレスポンスがJSON形式ではありません。もう一度お試しください。".to_string())?;
 
     // Validate structure

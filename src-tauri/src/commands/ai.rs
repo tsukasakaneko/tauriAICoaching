@@ -13,6 +13,15 @@ const KEY_ANALYSIS_COUNT: &str = "analysis_count";
 const KEY_CLOUD_CREDITS: &str = "cloud_credits";
 const FREE_TIER_LIMIT: u32 = 3;
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageStatus {
+    tier: String,
+    analysis_count: u32,
+    free_limit: u32,
+    cloud_credits: i64,
+}
+
 fn load_ai_config(app: &AppHandle) -> AiConfig {
     let Ok(store) = app.store(STORE_PATH) else {
         return AiConfig::default();
@@ -148,15 +157,11 @@ pub fn set_ai_config(app: AppHandle, config: AiConfig) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn get_usage_status(app: AppHandle) -> serde_json::Value {
-    let tier = get_license_tier(&app);
-    let analysis_count = get_analysis_count(&app);
-    let cloud_credits = get_cloud_credits(&app);
-
-    serde_json::json!({
-        "tier": tier,
-        "analysisCount": analysis_count,
-        "freeLimit": FREE_TIER_LIMIT,
-        "cloudCredits": cloud_credits,
-    })
+pub fn get_usage_status(app: AppHandle) -> UsageStatus {
+    UsageStatus {
+        tier: get_license_tier(&app),
+        analysis_count: get_analysis_count(&app),
+        free_limit: FREE_TIER_LIMIT,
+        cloud_credits: get_cloud_credits(&app),
+    }
 }
