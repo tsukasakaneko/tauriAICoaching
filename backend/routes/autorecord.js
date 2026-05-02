@@ -2,6 +2,7 @@
 
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
 const db = require('../db');
 const screenMonitor = require('../services/screenMonitor');
 const screenRecorder = require('../services/screenRecorder');
@@ -88,6 +89,13 @@ screenMonitor.on('matchStarted', () => {
 screenMonitor.on('resultScreenDetected', async () => {
   const videoPath = await screenRecorder.stop();
 
+  // Guard: resultScreenDetected fired but recorder was never started (e.g. monitor
+  // was watching before any match began). Nothing to analyse.
+  if (!videoPath) {
+    console.warn('[autorecord] resultScreenDetected fired with no recording path — skipping');
+    return;
+  }
+
   // Collect users who have an active session before starting async work
   const activeUsers = [...sseClients.keys()].filter(uid => activeSessions.has(uid));
 
@@ -128,6 +136,14 @@ screenMonitor.on('resultScreenDetected', async () => {
       broadcast(userId, 'error', { state: 'error', errorMessage: err.message });
       activeSessions.delete(userId);
     }
+  } finally {
+    // Delete the MP4 after analysis (success or failure) to reclaim disk space.
+    // The analysis JSON is persisted in DB; the raw video is no longer needed.
+    fs.unlink(videoPath, (unlinkErr) => {
+      if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+        console.warn('[autorecord] failed to delete recording:', unlinkErr.message);
+      }
+    });
   }
 });
 

@@ -37,4 +37,10 @@ db.exec(`
   )
 `);
 
+// Speed up the common "latest done session per user" query
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_match_sessions_user_status
+  ON match_sessions(user_id, status)
+`);
+
 module.exports = db;
