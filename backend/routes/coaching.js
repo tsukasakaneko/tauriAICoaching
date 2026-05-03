@@ -85,7 +85,7 @@ router.post("/analyze", requireAuth, async (req, res) => {
     });
   }
 
-  const { rank, agent, selfAssessment, review } = req.body;
+  const { rank, agent, selfAssessment, review, videoAnalysis } = req.body;
 
   if (!rank || !agent) {
     return res.status(400).json({ message: "ランクとエージェントは必須です" });
@@ -146,13 +146,43 @@ router.post("/analyze", requireAuth, async (req, res) => {
   }
 }`;
 
-  const userPrompt = `プレイヤー情報:
-- ランク: ${rank}
-- エージェント: ${agent}
-- 自己評価の課題: ${assessmentText}
-- プレイ振り返り: ${review || "特になし"}
+  let userPrompt = `プレイヤー情報:\n- ランク: ${rank}\n- エージェント: ${agent}\n- 自己評価の課題: ${assessmentText}\n- プレイ振り返り: ${review || "特になし"}\n`;
 
-上記の情報を基に、Valorantのコーチングレポートを生成してください。必ず有効なJSONのみを返してください。`;
+  if (videoAnalysis && typeof videoAnalysis === "object") {
+    const va = videoAnalysis;
+    userPrompt += "\n【自動解析データ (YOLOv8)】\n";
+    if (va.kills != null && va.deaths != null && va.assists != null) {
+      userPrompt += `- KDA: ${va.kills}/${va.deaths}/${va.assists}\n`;
+    }
+    if (va.headshotRate != null) {
+      userPrompt += `- ヘッドショット率: ${Math.round(va.headshotRate * 100)}%\n`;
+    }
+    if (va.damageDealt != null) {
+      userPrompt += `- ダメージ合計: ${va.damageDealt}\n`;
+    }
+    if (va.abilityKills != null) {
+      userPrompt += `- アビリティキル: ${va.abilityKills}回\n`;
+    }
+    if (va.dominantZone != null) {
+      userPrompt += `- 主な活動エリア: ${va.dominantZone}\n`;
+    }
+    if (va.aggressiveness != null) {
+      const label = va.aggressiveness > 0.7 ? "積極的" : va.aggressiveness > 0.4 ? "バランス型" : "慎重";
+      userPrompt += `- ポジショニング傾向: ${label} (スコア: ${va.aggressiveness.toFixed(2)})\n`;
+    }
+    if (va.deathsInLateRound != null) {
+      userPrompt += `- ラウンド後半デス数: ${va.deathsInLateRound}回\n`;
+    }
+    if (va.longestLoseStreak != null) {
+      userPrompt += `- 最長連敗ストリーク: ${va.longestLoseStreak}ラウンド\n`;
+    }
+    if (va.totalRounds != null && va.wonRounds != null) {
+      userPrompt += `- ラウンド勝敗: ${va.wonRounds}/${va.totalRounds}\n`;
+    }
+    userPrompt += "\n上記の客観的データと、プレイヤーの自己評価を合わせて分析してください。\n";
+  }
+
+  userPrompt += "\n上記の情報を基に、Valorantのコーチングレポートを生成してください。必ず有効なJSONのみを返してください。";
 
   try {
     const response = await anthropic.messages.create({

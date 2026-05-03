@@ -139,6 +139,25 @@ pub fn set_ai_config(app: AppHandle, config: AiConfig) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn test_claude_key(
+    http: State<'_, HttpClient>,
+    api_key: String,
+    model: String,
+) -> Result<String, String> {
+    crate::ai_provider::test_claude_connection(&http.0, &api_key, &model).await?;
+    Ok("Claude APIキーの認証に成功しました".to_string())
+}
+
+#[tauri::command]
+pub async fn test_ollama(
+    http: State<'_, HttpClient>,
+    url: String,
+    model: String,
+) -> Result<String, String> {
+    crate::ai_provider::test_ollama_connection(&http.0, &url, &model).await
+}
+
+#[tauri::command]
 pub fn get_usage_status(app: AppHandle) -> UsageStatus {
     UsageStatus {
         tier: get_license_tier(&app),
