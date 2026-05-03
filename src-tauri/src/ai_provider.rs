@@ -52,6 +52,7 @@ pub struct Summary {
 }
 
 pub async fn call_ai(
+    client: &reqwest::Client,
     config: &AiConfig,
     system_prompt: &str,
     user_prompt: &str,
@@ -60,10 +61,10 @@ pub async fn call_ai(
         AiProviderType::Cloud => {
             let api_key = config.claude_api_key.as_deref()
                 .ok_or("Claude APIキーが設定されていません。設定画面でAPIキーを入力してください。")?;
-            call_claude(api_key, &config.claude_model, system_prompt, user_prompt).await?
+            call_claude(client, api_key, &config.claude_model, system_prompt, user_prompt).await?
         }
         AiProviderType::Local => {
-            call_ollama(&config.ollama_url, &config.ollama_model, system_prompt, user_prompt).await?
+            call_ollama(client, &config.ollama_url, &config.ollama_model, system_prompt, user_prompt).await?
         }
     };
 
@@ -71,6 +72,7 @@ pub async fn call_ai(
 }
 
 async fn call_claude(
+    client: &reqwest::Client,
     api_key: &str,
     model: &str,
     system_prompt: &str,
@@ -100,7 +102,6 @@ async fn call_claude(
         text: Option<String>,
     }
 
-    let client = reqwest::Client::new();
     let request_body = ClaudeRequest {
         model,
         max_tokens: 2048,
@@ -138,6 +139,7 @@ async fn call_claude(
 }
 
 async fn call_ollama(
+    client: &reqwest::Client,
     base_url: &str,
     model: &str,
     system_prompt: &str,
@@ -168,7 +170,6 @@ async fn call_ollama(
     }
 
     let url = format!("{}/api/chat", base_url);
-    let client = reqwest::Client::new();
     let request_body = OllamaRequest {
         model,
         messages: vec![
@@ -198,13 +199,26 @@ async fn call_ollama(
     Ok(ollama_resp.message.content)
 }
 
+fn strip_code_fences(raw: &str) -> &str {
+    let s = raw.trim();
+    // Claude sometimes wraps JSON in ```json ... ``` or ``` ... ``` fences
+    if let Some(inner) = s.strip_prefix("```json") {
+        inner.trim_start_matches('\n').trim_end_matches("```").trim()
+    } else if let Some(inner) = s.strip_prefix("```") {
+        inner.trim_start_matches('\n').trim_end_matches("```").trim()
+    } else {
+        s
+    }
+}
+
 fn parse_and_validate(raw: String) -> Result<CoachingReport, String> {
-    let parsed: serde_json::Value = serde_json::from_str(&raw)
+    let clean = strip_code_fences(&raw);
+    let parsed: serde_json::Value = serde_json::from_str(clean)
         .map_err(|_| "AIのレスポンスがJSON形式ではありません。もう一度お試しください。".to_string())?;
 
     // Validate structure
     let improvements = parsed["improvements"].as_array()
-        .ok_or("AIレスポンスのimprovedmentsフィールドが不正です")?;
+        .ok_or("AIレスポンスのimprovementsフィールドが不正です")?;
 
     for item in improvements {
         if item["title"].as_str().is_none()

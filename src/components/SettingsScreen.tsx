@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import type { AiConfig, AiProvider, LicenseStatus, UsageStatus } from "../types";
-import { tauriApi } from "../api";
+import { api, tauriApi } from "../api";
 
 interface Props {
   onBack: () => void;
+  onAccountDeleted: () => void;
 }
 
-export default function SettingsScreen({ onBack }: Props) {
+export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
   const [config, setConfig] = useState<AiConfig>({
     provider: "cloud",
     claude_api_key: null,
@@ -18,8 +19,12 @@ export default function SettingsScreen({ onBack }: Props) {
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
   const [licenseKey, setLicenseKey] = useState("");
   const [claudeKeyInput, setClaudeKeyInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -32,7 +37,13 @@ export default function SettingsScreen({ onBack }: Props) {
       setConfig(cfg);
       setLicenseStatus(lic);
       setUsageStatus(usage);
-    }).catch(console.error);
+    }).catch((err) => {
+      setLoadError(
+        err instanceof Error ? err.message : "設定の読み込みに失敗しました"
+      );
+    }).finally(() => {
+      setLoading(false);
+    });
   }, []);
 
   const flash = (msg: string, isError = false) => {
@@ -65,14 +76,17 @@ export default function SettingsScreen({ onBack }: Props) {
     setActivating(true);
     try {
       const result = await tauriApi.activateLicense(trimmed);
-      setLicenseStatus(result);
+      setLicenseStatus(result.license);
       setLicenseKey("");
+      const lic = result.license;
       const tierLabel =
-        result.tier === "pro" ? "Proライセンス" :
-        result.tier === "cloud" ? `クラウドAI (${result.cloud_credits}クレジット付与)` :
+        lic.tier === "pro" ? "Proライセンス（無制限）" :
+        lic.tier === "cloud" ? `クラウドAI (${lic.cloud_credits}クレジット)` :
         "クレジット追加";
-      flash(`✓ 有効化成功: ${tierLabel}`);
-      // Refresh usage status
+      const bonusMsg = result.firstPaymentBonus > 0
+        ? ` 🎁 初回ボーナス +${result.firstPaymentBonus}クレジット付与！`
+        : "";
+      flash(`✓ 有効化成功: ${tierLabel}${bonusMsg}`);
       tauriApi.getUsageStatus().then(setUsageStatus).catch(console.error);
     } catch (err) {
       flash(err instanceof Error ? err.message : "有効化に失敗しました", true);
@@ -81,11 +95,50 @@ export default function SettingsScreen({ onBack }: Props) {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await api.deleteAccount();
+      onAccountDeleted();
+    } catch (err) {
+      flash(err instanceof Error ? err.message : "削除に失敗しました", true);
+      setDeleteConfirm(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const tierBadge = (tier: string) => {
     if (tier === "pro") return <span className="badge paid">Pro</span>;
     if (tier === "cloud") return <span className="badge cloud">Cloud AI</span>;
     return <span className="badge free">無料</span>;
   };
+
+  if (loading) {
+    return (
+      <div className="screen settings-screen">
+        <div className="loading">設定を読み込み中...</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="screen settings-screen">
+        <header className="form-header">
+          <div className="brand-small">
+            <span className="brand-accent">VALORANT</span> 設定
+          </div>
+          <button className="logout-btn" onClick={onBack}>
+            ← 戻る
+          </button>
+        </header>
+        <p className="error" style={{ marginTop: "2rem" }}>
+          設定の読み込みに失敗しました: {loadError}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="screen settings-screen">
@@ -116,12 +169,10 @@ export default function SettingsScreen({ onBack }: Props) {
                   <strong>{licenseStatus.cloud_credits} 回</strong>
                 </div>
               )}
-              {usageStatus && licenseStatus.tier === "free" && (
+              {licenseStatus.tier === "cloud" && licenseStatus.cloud_expires_at && (
                 <div className="license-row">
-                  <span>無料分析残り</span>
-                  <strong>
-                    {Math.max(0, usageStatus.freeLimit - usageStatus.analysisCount)} / {usageStatus.freeLimit} 回
-                  </strong>
+                  <span>サブスクリプション期限</span>
+                  <strong className="expiry-date">{licenseStatus.cloud_expires_at}</strong>
                 </div>
               )}
             </div>
@@ -234,6 +285,42 @@ export default function SettingsScreen({ onBack }: Props) {
           >
             {saving ? "保存中..." : "設定を保存"}
           </button>
+        </section>
+
+        {/* ── Account Deletion Section (GDPR Right to Erasure) ─── */}
+        <section className="settings-section danger-zone">
+          <h3>アカウント管理</h3>
+          <p className="hint-text">
+            アカウントを削除すると、すべての分析履歴・個人情報が完全に削除され、復元できません。
+          </p>
+          {!deleteConfirm ? (
+            <button
+              className="danger-btn"
+              onClick={() => setDeleteConfirm(true)}
+            >
+              アカウントを削除する
+            </button>
+          ) : (
+            <div className="delete-confirm-box">
+              <p>本当に削除しますか？この操作は取り消せません。</p>
+              <div className="delete-confirm-actions">
+                <button
+                  className="danger-btn"
+                  onClick={handleDeleteAccount}
+                  disabled={deleting}
+                >
+                  {deleting ? "削除中..." : "はい、削除します"}
+                </button>
+                <button
+                  className="text-btn"
+                  onClick={() => setDeleteConfirm(false)}
+                  disabled={deleting}
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
       </div>

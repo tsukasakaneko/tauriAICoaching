@@ -85,7 +85,13 @@ class ScreenRecorder {
         return;
       }
 
+      // Force-kill timer — cleared if process exits gracefully first
+      const forceKillTimer = setTimeout(() => {
+        if (this._process) this._process.kill('SIGKILL');
+      }, 8000);
+
       this._process.once('exit', () => {
+        clearTimeout(forceKillTimer);
         this.isRecording = false;
         this._process = null;
         resolve(out);
@@ -98,13 +104,6 @@ class ScreenRecorder {
       } catch {
         this._process.kill('SIGTERM');
       }
-
-      // Force-kill after 8s if it hasn't stopped
-      setTimeout(() => {
-        if (this._process) {
-          this._process.kill('SIGKILL');
-        }
-      }, 8000);
     });
   }
 }

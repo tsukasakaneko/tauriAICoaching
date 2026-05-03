@@ -11,9 +11,12 @@ mod prompt_builder;
 
 struct BackendProcess(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
+pub struct HttpClient(pub reqwest::Client);
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(HttpClient(reqwest::Client::new()))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![

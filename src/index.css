@@ -392,6 +392,12 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
   padding: 0.3rem 0;
 }
 
+.expiry-date {
+  font-family: monospace;
+  letter-spacing: 0.05em;
+  color: var(--warning);
+}
+
 .key-input-row {
   display: flex;
   gap: 0.5rem;
@@ -447,6 +453,65 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
 }
 .user-info { display: flex; align-items: center; gap: 0.6rem; }
 .user-email { color: var(--text-muted); font-size: 0.85rem; }
+
+/* ---- Usage badge ---- */
+.usage-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.usage-badge.usage-warn {
+  background: rgba(255, 152, 0, 0.12);
+  border-color: var(--warning);
+  color: var(--warning);
+}
+.usage-badge.usage-empty {
+  background: rgba(255, 107, 107, 0.12);
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* ---- Analysis progress ---- */
+.analysis-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  animation: fadeIn 0.25s ease;
+}
+.analysis-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.analysis-step-text {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.analysis-time {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(0.75); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .form-title {
   font-size: 1.3rem;
   margin-bottom: 1.5rem;
@@ -527,3 +592,134 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
   border-bottom: 1px solid var(--border);
 }
 .training-list li:last-child { border-bottom: none; }
+
+/* ── Upgrade Modal ─────────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease;
+}
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 480px;
+  width: 90%;
+  text-align: center;
+}
+.modal-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+.modal-title { font-size: 1.2rem; margin-bottom: 0.75rem; }
+.modal-body { color: var(--text-muted); line-height: 1.6; margin-bottom: 1.5rem; }
+
+.plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.5rem; }
+.plan-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.9rem;
+  text-align: left;
+}
+.plan-card--highlight { border-color: var(--accent); }
+.plan-name { font-weight: 700; margin-bottom: 0.4rem; }
+.plan-desc { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+
+.modal-actions { display: flex; flex-direction: column; gap: 0.6rem; align-items: center; }
+.text-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.6rem;
+}
+.text-btn:hover { color: var(--text); }
+
+/* ── Low-credits warning banner ────────────────────────────────────────────── */
+.low-credits-banner {
+  background: rgba(255, 152, 0, 0.12);
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  color: var(--warning);
+  padding: 0.7rem 1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.low-credits-banner:hover { background: rgba(255, 152, 0, 0.2); }
+
+/* ── Report upgrade CTA ────────────────────────────────────────────────────── */
+.upgrade-cta-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: linear-gradient(135deg, #1a1d2e, #212438);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin: 2rem 0 1rem;
+  cursor: pointer;
+}
+.upgrade-cta-text { flex: 1; }
+.upgrade-cta-text strong { display: block; margin-bottom: 0.35rem; }
+.upgrade-cta-text p { font-size: 0.85rem; color: var(--text-muted); margin: 0; line-height: 1.4; }
+.upgrade-cta-btn { width: auto; white-space: nowrap; flex-shrink: 0; }
+
+/* ── License-required banner (free tier) ──────────────────────────────────── */
+.license-required-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: linear-gradient(135deg, rgba(255,70,85,0.12), rgba(255,70,85,0.06));
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.license-required-banner:hover { background: linear-gradient(135deg, rgba(255,70,85,0.2), rgba(255,70,85,0.1)); }
+.license-required-banner strong { display: block; margin-bottom: 0.25rem; }
+.license-required-banner p { font-size: 0.83rem; color: var(--text-muted); margin: 0; }
+
+/* ── First-payment bonus highlight in modal ────────────────────────────────── */
+.bonus-highlight {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: var(--warning);
+}
+
+/* ── Danger zone (account deletion) ───────────────────────────────────────── */
+.danger-zone { border-color: rgba(255, 107, 107, 0.35); }
+.danger-zone h3 { color: var(--error); }
+
+.danger-btn {
+  background: transparent;
+  border: 1px solid var(--error);
+  color: var(--error);
+  padding: 0.55rem 1.1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  transition: background 0.15s;
+}
+.danger-btn:hover:not(:disabled) { background: rgba(255, 107, 107, 0.12); }
+.danger-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.delete-confirm-box {
+  margin-top: 0.75rem;
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  border-radius: 8px;
+  padding: 1rem;
+}
+.delete-confirm-box p { margin-bottom: 0.75rem; color: var(--error); font-size: 0.9rem; }
+.delete-confirm-actions { display: flex; gap: 0.75rem; align-items: center; }

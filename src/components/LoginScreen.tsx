@@ -53,9 +53,9 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
-            placeholder="6文字以上"
+            placeholder="8文字以上"
           />
         </div>
         {error && <p className="error">{error}</p>}

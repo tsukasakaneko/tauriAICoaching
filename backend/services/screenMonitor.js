@@ -26,6 +26,7 @@ class ScreenMonitor extends EventEmitter {
   }
 
   get state() { return this._state; }
+  get isRunning() { return this._running; }
 
   start() {
     if (this._running) return;

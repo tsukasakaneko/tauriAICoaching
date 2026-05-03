@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type {
   User,
   CoachingFormData,
@@ -6,16 +6,55 @@ import type {
   Rank,
   SelfAssessmentItem,
   VideoAnalysisResult,
+  UsageStatus,
 } from "../types";
 import { tauriApi } from "../api";
 
-const RANKS: Rank[] = ["ブロンズ", "シルバー", "ゴールド", "プラチナ"];
+const RANKS: Rank[] = [
+  "アイアン", "ブロンズ", "シルバー", "ゴールド", "プラチナ",
+  "ダイヤモンド", "アセンダント", "イモータル", "レディアント",
+];
+
+const KNOWN_AGENTS = [
+  "Astra", "Breach", "Brimstone", "Chamber", "Clove", "Cypher",
+  "Deadlock", "Fade", "Gekko", "Harbor", "Iso", "Jett", "KAY/O",
+  "Killjoy", "Neon", "Omen", "Phoenix", "Reyna", "Sage", "Skye",
+  "Sova", "Tejo", "Viper", "Vyse", "Yoru",
+];
+
 const ASSESSMENT_OPTIONS: SelfAssessmentItem[] = [
   "エイム弱い",
   "立ち回り不安",
   "判断遅い",
   "撃ち負けが多い",
 ];
+
+const ANALYSIS_STEPS = [
+  "プレイデータを解析中...",
+  "弱点パターンを特定中...",
+  "エージェント特性を考慮中...",
+  "改善アクションを設計中...",
+  "トレーニングプランを作成中...",
+];
+
+const FORM_STORAGE_KEY = "valorant-coaching-form";
+
+function loadSavedField<T>(key: string, fallback: T): T {
+  try {
+    const raw = sessionStorage.getItem(FORM_STORAGE_KEY);
+    if (!raw) return fallback;
+    const data = JSON.parse(raw);
+    return key in data ? (data[key] as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// Trigger the upgrade modal for these errors instead of showing inline text
+const LIMIT_ERROR_PATTERNS = ["上限", "クレジットが不足", "有効期限が切れ"];
+function isLimitError(msg: string) {
+  return LIMIT_ERROR_PATTERNS.some((p) => msg.includes(p));
+}
 
 interface Props {
   user: User;
@@ -24,6 +63,7 @@ interface Props {
   onLogout: () => void;
   onAutoRecord: () => void;
   onSettings: () => void;
+  onUpgradeNeeded: () => void;
 }
 
 export default function FormScreen({
@@ -33,13 +73,38 @@ export default function FormScreen({
   onLogout,
   onAutoRecord,
   onSettings,
+  onUpgradeNeeded,
 }: Props) {
-  const [rank, setRank] = useState<Rank>("シルバー");
-  const [agent, setAgent] = useState("");
-  const [selfAssessment, setSelfAssessment] = useState<SelfAssessmentItem[]>([]);
-  const [review, setReview] = useState("");
+  const [rank, setRank] = useState<Rank>(() => loadSavedField<Rank>("rank", "シルバー"));
+  const [agent, setAgent] = useState(() => loadSavedField("agent", ""));
+  const [selfAssessment, setSelfAssessment] = useState<SelfAssessmentItem[]>(
+    () => loadSavedField<SelfAssessmentItem[]>("selfAssessment", [])
+  );
+  const [review, setReview] = useState(() => loadSavedField("review", ""));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [analysisStep, setAnalysisStep] = useState(0);
+  const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
+  const stepTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    tauriApi.getUsageStatus().then(setUsageStatus).catch(() => {});
+  }, []);
+
+  // Persist form data across navigation
+  useEffect(() => {
+    sessionStorage.setItem(
+      FORM_STORAGE_KEY,
+      JSON.stringify({ rank, agent, selfAssessment, review })
+    );
+  }, [rank, agent, selfAssessment, review]);
+
+  // Cleanup step timer on unmount
+  useEffect(() => {
+    return () => {
+      if (stepTimerRef.current !== null) clearInterval(stepTimerRef.current);
+    };
+  }, []);
 
   const toggleAssessment = (item: SelfAssessmentItem) => {
     setSelfAssessment((prev) =>
@@ -57,6 +122,11 @@ export default function FormScreen({
     }
 
     setSubmitting(true);
+    setAnalysisStep(0);
+    stepTimerRef.current = window.setInterval(() => {
+      setAnalysisStep((s) => (s + 1) % ANALYSIS_STEPS.length);
+    }, 3500);
+
     try {
       const formData: CoachingFormData = {
         rank,
@@ -67,11 +137,28 @@ export default function FormScreen({
       const result = await tauriApi.analyze(formData, videoAnalysis);
       onReportReady(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "分析に失敗しました");
+      const msg = err instanceof Error ? err.message : "分析に失敗しました";
+      if (isLimitError(msg)) {
+        onUpgradeNeeded();
+      } else {
+        setError(msg);
+      }
     } finally {
+      if (stepTimerRef.current !== null) {
+        clearInterval(stepTimerRef.current);
+        stepTimerRef.current = null;
+      }
       setSubmitting(false);
     }
   };
+
+  const isFreeTier = !usageStatus || usageStatus.tier === "free";
+
+  // Proactive credit warning for cloud users before they hit zero
+  const lowCreditsWarning =
+    usageStatus?.tier === "cloud" && usageStatus.cloudCredits <= 5 && usageStatus.cloudCredits > 0
+      ? `クラウドクレジット残り ${usageStatus.cloudCredits} 回です。VCREDITキーで補充してください。`
+      : null;
 
   return (
     <div className="screen form-screen">
@@ -92,7 +179,22 @@ export default function FormScreen({
 
       <h2 className="form-title">コーチングフォーム</h2>
 
-      {/* Auto-record CTA */}
+      {isFreeTier && (
+        <div className="license-required-banner" onClick={onUpgradeNeeded}>
+          <div>
+            <strong>ライセンスキーが必要です</strong>
+            <p>初回アクティベートで +10クレジットボーナス 🎁</p>
+          </div>
+          <span className="cta-arrow">→</span>
+        </div>
+      )}
+
+      {lowCreditsWarning && (
+        <div className="low-credits-banner" onClick={onUpgradeNeeded}>
+          ⚠ {lowCreditsWarning}
+        </div>
+      )}
+
       {!videoAnalysis && (
         <div className="autorecord-cta" onClick={onAutoRecord}>
           <span className="cta-icon">🎮</span>
@@ -104,7 +206,6 @@ export default function FormScreen({
         </div>
       )}
 
-      {/* Video analysis badge */}
       {videoAnalysis && (
         <div className="video-analysis-badge">
           <span>📊 自動解析データあり</span>
@@ -131,10 +232,16 @@ export default function FormScreen({
           <label>使用エージェント</label>
           <input
             type="text"
+            list="agents-list"
             value={agent}
             onChange={(e) => setAgent(e.target.value)}
             placeholder="例: Jett, Sage, Brimstone..."
           />
+          <datalist id="agents-list">
+            {KNOWN_AGENTS.map((a) => (
+              <option key={a} value={a} />
+            ))}
+          </datalist>
         </div>
 
         <div className="field">
@@ -165,9 +272,24 @@ export default function FormScreen({
 
         {error && <p className="error">{error}</p>}
 
-        <button type="submit" disabled={submitting} className="primary-btn analyze-btn">
-          {submitting ? "AI分析中..." : "分析する"}
+        <button
+          type="submit"
+          disabled={submitting || isFreeTier}
+          className="primary-btn analyze-btn"
+          onClick={isFreeTier ? (e) => { e.preventDefault(); onUpgradeNeeded(); } : undefined}
+        >
+          {isFreeTier ? "ライセンスキーが必要です" : submitting ? "分析中..." : "分析する"}
         </button>
+
+        {submitting && (
+          <div className="analysis-progress">
+            <span className="analysis-dot" />
+            <span className="analysis-step-text">
+              {ANALYSIS_STEPS[analysisStep]}
+            </span>
+            <span className="analysis-time">通常 10〜30 秒かかります</span>
+          </div>
+        )}
       </form>
     </div>
   );

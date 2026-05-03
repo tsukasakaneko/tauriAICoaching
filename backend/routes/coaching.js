@@ -7,6 +7,31 @@ const db = require("../db");
 
 const router = express.Router();
 
+// Singleton Anthropic client — created once, reused for every request
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// Per-user daily rate limit — persisted in the daily_usage table so restarts don't reset counts.
+// Free users: 5/day  Paid users: 20/day
+const DAILY_LIMIT_FREE = 5;
+const DAILY_LIMIT_PAID = 20;
+
+const _stmtUpsert = db.prepare(`
+  INSERT INTO daily_usage (user_id, date, count) VALUES (?, ?, 1)
+  ON CONFLICT (user_id, date) DO UPDATE SET count = count + 1
+`);
+const _stmtGet = db.prepare(
+  `SELECT count FROM daily_usage WHERE user_id = ? AND date = ?`
+);
+
+function checkDailyLimit(userId, isPaid) {
+  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  const limit = isPaid ? DAILY_LIMIT_PAID : DAILY_LIMIT_FREE;
+  const row = _stmtGet.get(userId, today);
+  if (row && row.count >= limit) return false;
+  _stmtUpsert.run(userId, today);
+  return true;
+}
+
 function requireAuth(req, res, next) {
   const authHeader = req.headers["authorization"];
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -33,16 +58,56 @@ router.get("/me", requireAuth, (req, res) => {
   });
 });
 
+// DELETE /me — GDPR Right to Erasure: permanently delete the account and all associated data
+router.delete("/me", requireAuth, (req, res) => {
+  const userId = req.user.id;
+  // Use a transaction so all deletes succeed or all roll back atomically
+  const deleteAll = db.transaction(() => {
+    db.prepare("DELETE FROM daily_usage    WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM match_sessions WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM users          WHERE id      = ?").run(userId);
+  });
+  try {
+    deleteAll();
+    res.json({ ok: true, message: "アカウントとすべての関連データを削除しました" });
+  } catch (err) {
+    console.error("Account deletion error:", err);
+    res.status(500).json({ message: "アカウントの削除に失敗しました" });
+  }
+});
+
 // POST /analyze
 router.post("/analyze", requireAuth, async (req, res) => {
-  if (!req.user.is_paid) {
-    return res.status(403).json({ message: "この機能は有料会員限定です" });
+  if (!checkDailyLimit(req.user.id, req.user.is_paid === 1)) {
+    const limit = req.user.is_paid === 1 ? DAILY_LIMIT_PAID : DAILY_LIMIT_FREE;
+    return res.status(429).json({
+      message: `1日の分析回数上限（${limit}回）に達しました。明日またお試しください。`,
+    });
   }
 
   const { rank, agent, selfAssessment, review } = req.body;
 
   if (!rank || !agent) {
     return res.status(400).json({ message: "ランクとエージェントは必須です" });
+  }
+
+  // Enforce input length limits to prevent oversized payloads reaching the AI API
+  const MAX_AGENT_LEN = 60;
+  const MAX_REVIEW_LEN = 2000;
+  const MAX_ASSESSMENT_ITEMS = 10;
+  const MAX_ASSESSMENT_ITEM_LEN = 100;
+
+  if (typeof agent !== "string" || agent.length > MAX_AGENT_LEN) {
+    return res.status(400).json({ message: `エージェント名は${MAX_AGENT_LEN}文字以内で入力してください` });
+  }
+  if (review && (typeof review !== "string" || review.length > MAX_REVIEW_LEN)) {
+    return res.status(400).json({ message: `振り返りは${MAX_REVIEW_LEN}文字以内で入力してください` });
+  }
+  if (selfAssessment) {
+    if (!Array.isArray(selfAssessment) || selfAssessment.length > MAX_ASSESSMENT_ITEMS
+      || selfAssessment.some((s) => typeof s !== "string" || s.length > MAX_ASSESSMENT_ITEM_LEN)) {
+      return res.status(400).json({ message: "自己評価の値が不正です" });
+    }
   }
 
   const assessmentText =
@@ -88,8 +153,6 @@ router.post("/analyze", requireAuth, async (req, res) => {
 - プレイ振り返り: ${review || "特になし"}
 
 上記の情報を基に、Valorantのコーチングレポートを生成してください。必ず有効なJSONのみを返してください。`;
-
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   try {
     const response = await anthropic.messages.create({

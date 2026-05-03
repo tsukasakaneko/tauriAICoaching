@@ -1,4 +1,6 @@
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 #[derive(Debug, Deserialize)]
 pub struct AnalyzePayload {
@@ -35,12 +37,94 @@ pub struct VideoAnalysisData {
     pub won_rounds: Option<u32>,
 }
 
-pub fn build_system_prompt() -> String {
-    r#"あなたはValorantのプロコーチです。
-ブロンズからプラチナのプレイヤーに対して、具体的で実行可能な改善アドバイスを提供してください。
+// ─── Agent knowledge base ─────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct AgentKnowledge {
+    role: String,
+    playstyle: String,
+    tips: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RankKnowledge {
+    calibration: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct KnowledgeBase {
+    agents: HashMap<String, AgentKnowledge>,
+    ranks: HashMap<String, RankKnowledge>,
+}
+
+static KNOWLEDGE_BASE: OnceLock<KnowledgeBase> = OnceLock::new();
+
+fn get_knowledge_base() -> &'static KnowledgeBase {
+    KNOWLEDGE_BASE.get_or_init(|| {
+        let content = include_str!("../resources/agent_knowledge.toml");
+        toml::from_str(content).unwrap_or_else(|_| KnowledgeBase {
+            agents: HashMap::new(),
+            ranks: HashMap::new(),
+        })
+    })
+}
+
+fn rank_to_english(rank: &str) -> &str {
+    match rank {
+        "アイアン"     => "Iron",
+        "ブロンズ"     => "Bronze",
+        "シルバー"     => "Silver",
+        "ゴールド"     => "Gold",
+        "プラチナ"     => "Platinum",
+        "ダイヤモンド" => "Diamond",
+        "アセンダント" => "Ascendant",
+        "イモータル"   => "Immortal",
+        "レディアント" => "Radiant",
+        _ => rank,
+    }
+}
+
+// ─── Prompt builders ──────────────────────────────────────────────────────────
+
+pub fn build_system_prompt(agent: &str, rank: &str) -> String {
+    let kb = get_knowledge_base();
+
+    let mut prompt = r#"あなたはValorantのプロコーチです。
+全ランク帯（アイアン〜レディアント）のプレイヤーに対して、そのランクに合った具体的で実行可能な改善アドバイスを提供してください。
 抽象的な表現は禁止。必ず"行動レベル"に落としてください。
 データがある場合は必ず数値を引用して根拠を示してください（例: 「HS率が23%と低いため…」）。
+"#.to_string();
 
+    // Inject agent-specific knowledge if available
+    let primary_agent = agent.split(',').next().unwrap_or(agent).trim();
+    let capitalized = {
+        let mut chars = primary_agent.chars();
+        match chars.next() {
+            None => String::new(),
+            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        }
+    };
+
+    if let Some(agent_kb) = kb.agents.get(&capitalized) {
+        prompt.push_str(&format!(
+            "\n【{}のエージェント特性】\nロール: {}\nスタイル: {}\nコーチング上の重要ポイント:\n",
+            capitalized, agent_kb.role, agent_kb.playstyle
+        ));
+        for tip in &agent_kb.tips {
+            prompt.push_str(&format!("- {}\n", tip));
+        }
+    }
+
+    // Inject rank-specific calibration
+    let rank_en = rank_to_english(rank);
+    if let Some(rank_kb) = kb.ranks.get(rank_en) {
+        prompt.push_str(&format!(
+            "\n【{}帯へのコーチング指針】\n{}\n",
+            rank, rank_kb.calibration
+        ));
+    }
+
+    prompt.push_str(r#"
 以下のJSON形式のみで返答してください：
 {
   "improvements": [
@@ -65,7 +149,9 @@ pub fn build_system_prompt() -> String {
     "weaknesses": "主な弱点の説明",
     "focus": "最優先で取り組むべき課題"
   }
-}"#.to_string()
+}"#);
+
+    prompt
 }
 
 pub fn build_user_prompt(payload: &AnalyzePayload) -> String {

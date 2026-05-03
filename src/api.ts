@@ -7,6 +7,7 @@ import type {
   VideoAnalysisResult,
   AiConfig,
   LicenseStatus,
+  ActivationResult,
   UsageStatus,
 } from "./types";
 
@@ -56,6 +57,8 @@ export const api = {
 
   getMe: () => request<User>("/me"),
 
+  deleteAccount: () => request<{ ok: boolean }>("/me", { method: "DELETE" }),
+
   // Auto-record endpoints
   startMonitoring: () =>
     request<{ ok: boolean; state: string }>("/autorecord/start", { method: "POST" }),
@@ -100,8 +103,8 @@ export const tauriApi = {
 
   getUsageStatus: (): Promise<UsageStatus> => invoke<UsageStatus>("get_usage_status"),
 
-  activateLicense: (key: string): Promise<LicenseStatus> =>
-    invoke<LicenseStatus>("activate_license", { key }),
+  activateLicense: (key: string): Promise<ActivationResult> =>
+    invoke<ActivationResult>("activate_license", { key }),
 
   getLicenseStatus: (): Promise<LicenseStatus> => invoke<LicenseStatus>("get_license_status"),
 };

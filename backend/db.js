@@ -23,6 +23,16 @@ db.exec(`
   )
 `);
 
+// Persistent daily usage counter — survives server restarts unlike an in-memory Map
+db.exec(`
+  CREATE TABLE IF NOT EXISTS daily_usage (
+    user_id   INTEGER NOT NULL REFERENCES users(id),
+    date      TEXT    NOT NULL,           -- "YYYY-MM-DD"
+    count     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, date)
+  )
+`);
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS match_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,6 +45,12 @@ db.exec(`
     status TEXT DEFAULT 'recording',
     error_message TEXT
   )
+`);
+
+// Speed up the common "latest done session per user" query
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_match_sessions_user_status
+  ON match_sessions(user_id, status)
 `);
 
 module.exports = db;

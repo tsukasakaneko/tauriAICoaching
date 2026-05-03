@@ -6,7 +6,16 @@ export interface User {
   isPaid: boolean;
 }
 
-export type Rank = "ブロンズ" | "シルバー" | "ゴールド" | "プラチナ";
+export type Rank =
+  | "アイアン"
+  | "ブロンズ"
+  | "シルバー"
+  | "ゴールド"
+  | "プラチナ"
+  | "ダイヤモンド"
+  | "アセンダント"
+  | "イモータル"
+  | "レディアント";
 
 export type SelfAssessmentItem =
   | "エイム弱い"
@@ -88,12 +97,17 @@ export interface LicenseStatus {
   tier: "free" | "pro" | "cloud";
   cloud_credits: number;
   has_key: boolean;
+  cloud_expires_at?: string; // "YYYY-MM" for CloudMonthly subscriptions
+}
+
+/** Returned from activate_license; firstPaymentBonus > 0 means welcome bonus was granted. */
+export interface ActivationResult {
+  license: LicenseStatus;
+  firstPaymentBonus: number;
 }
 
 export interface UsageStatus {
   tier: string;
-  analysisCount: number;
-  freeLimit: number;
   cloudCredits: number;
 }
 
