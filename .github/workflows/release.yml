@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "バージョンタグ (例: v1.0.0)"
+        required: true
+        type: string
+      release_name:
+        description: "リリースタイトル (省略時はタグと同じ)"
+        required: false
+        type: string
+      draft:
+        description: "ドラフトとして作成する"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  # ── Job 1: GitHub Release を1回だけ作成する ──────────────────────────────
+  create-release:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.create.outputs.release_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        id: create
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          NAME="${{ github.event.inputs.release_name }}"
+          if [ -z "$NAME" ]; then
+            NAME="$TAG"
+          fi
+
+          DRAFT_FLAG=""
+          if [ "${{ github.event.inputs.draft }}" = "true" ]; then
+            DRAFT_FLAG="--draft"
+          fi
+
+          gh release create "$TAG" \
+            --title "$NAME" \
+            --notes "各プラットフォーム向けのインストーラーはアセットからダウンロードしてください。" \
+            $DRAFT_FLAG
+
+          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.id')
+          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
+
+  # ── Job 2: 各プラットフォームでビルドし、アーティファクトをアップロード ──
+  build:
+    needs: create-release
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            rust_target: ""
+            args: ""
+
+          - platform: macos-latest
+            rust_target: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin
+
+          - platform: macos-13
+            rust_target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
+
+          - platform: ubuntu-22.04
+            rust_target: ""
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Linux: Tauri v2 必須のシステムパッケージ
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workdir: src-tauri
+
+      # フロントエンド依存関係
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # バックエンド依存関係
+      # better-sqlite3, onnxruntime-node, sharp 等のネイティブアドオンを
+      # 各プラットフォーム向けにリビルドするため、個別インストールが必要
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      # Tauri ビルド & GitHub Release へアップロード
+      - name: Build Tauri app and upload to release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          args: ${{ matrix.args }}
