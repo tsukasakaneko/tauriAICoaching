@@ -73,14 +73,17 @@ export default function SettingsScreen({ onBack }: Props) {
     setActivating(true);
     try {
       const result = await tauriApi.activateLicense(trimmed);
-      setLicenseStatus(result);
+      setLicenseStatus(result.license);
       setLicenseKey("");
+      const lic = result.license;
       const tierLabel =
-        result.tier === "pro" ? "Proライセンス" :
-        result.tier === "cloud" ? `クラウドAI (${result.cloud_credits}クレジット付与)` :
+        lic.tier === "pro" ? "Proライセンス（無制限）" :
+        lic.tier === "cloud" ? `クラウドAI (${lic.cloud_credits}クレジット)` :
         "クレジット追加";
-      flash(`✓ 有効化成功: ${tierLabel}`);
-      // Refresh usage status
+      const bonusMsg = result.firstPaymentBonus > 0
+        ? ` 🎁 初回ボーナス +${result.firstPaymentBonus}クレジット付与！`
+        : "";
+      flash(`✓ 有効化成功: ${tierLabel}${bonusMsg}`);
       tauriApi.getUsageStatus().then(setUsageStatus).catch(console.error);
     } catch (err) {
       flash(err instanceof Error ? err.message : "有効化に失敗しました", true);
@@ -154,14 +157,6 @@ export default function SettingsScreen({ onBack }: Props) {
                 <div className="license-row">
                   <span>サブスクリプション期限</span>
                   <strong className="expiry-date">{licenseStatus.cloud_expires_at}</strong>
-                </div>
-              )}
-              {usageStatus && licenseStatus.tier === "free" && (
-                <div className="license-row">
-                  <span>無料分析残り</span>
-                  <strong>
-                    {Math.max(0, usageStatus.freeLimit - usageStatus.analysisCount)} / {usageStatus.freeLimit} 回
-                  </strong>
                 </div>
               )}
             </div>

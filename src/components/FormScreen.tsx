@@ -152,17 +152,12 @@ export default function FormScreen({
     }
   };
 
-  const remainingFree =
-    usageStatus?.tier === "free"
-      ? Math.max(0, usageStatus.freeLimit - usageStatus.analysisCount)
-      : null;
+  const isFreeTier = !usageStatus || usageStatus.tier === "free";
 
-  // Show a proactive warning before the user hits a hard wall
+  // Proactive credit warning for cloud users before they hit zero
   const lowCreditsWarning =
     usageStatus?.tier === "cloud" && usageStatus.cloudCredits <= 5 && usageStatus.cloudCredits > 0
       ? `クラウドクレジット残り ${usageStatus.cloudCredits} 回です。VCREDITキーで補充してください。`
-      : remainingFree === 1
-      ? "無料プランの残り分析回数はあと1回です。アップグレードをご検討ください。"
       : null;
 
   return (
@@ -173,19 +168,6 @@ export default function FormScreen({
         </div>
         <div className="user-info">
           <span className="user-email">{user.email}</span>
-          {remainingFree !== null && (
-            <span
-              className={`usage-badge ${
-                remainingFree === 0
-                  ? "usage-empty"
-                  : remainingFree === 1
-                  ? "usage-warn"
-                  : ""
-              }`}
-            >
-              残り {remainingFree}/{usageStatus!.freeLimit} 回
-            </span>
-          )}
           <button className="icon-btn" onClick={onSettings} title="設定">
             ⚙
           </button>
@@ -196,6 +178,16 @@ export default function FormScreen({
       </header>
 
       <h2 className="form-title">コーチングフォーム</h2>
+
+      {isFreeTier && (
+        <div className="license-required-banner" onClick={onUpgradeNeeded}>
+          <div>
+            <strong>ライセンスキーが必要です</strong>
+            <p>初回アクティベートで +10クレジットボーナス 🎁</p>
+          </div>
+          <span className="cta-arrow">→</span>
+        </div>
+      )}
 
       {lowCreditsWarning && (
         <div className="low-credits-banner" onClick={onUpgradeNeeded}>
@@ -282,10 +274,11 @@ export default function FormScreen({
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || isFreeTier}
           className="primary-btn analyze-btn"
+          onClick={isFreeTier ? (e) => { e.preventDefault(); onUpgradeNeeded(); } : undefined}
         >
-          {submitting ? "分析中..." : "分析する"}
+          {isFreeTier ? "ライセンスキーが必要です" : submitting ? "分析中..." : "分析する"}
         </button>
 
         {submitting && (

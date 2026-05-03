@@ -100,10 +100,14 @@ export interface LicenseStatus {
   cloud_expires_at?: string; // "YYYY-MM" for CloudMonthly subscriptions
 }
 
+/** Returned from activate_license; firstPaymentBonus > 0 means welcome bonus was granted. */
+export interface ActivationResult {
+  license: LicenseStatus;
+  firstPaymentBonus: number;
+}
+
 export interface UsageStatus {
   tier: string;
-  analysisCount: number;
-  freeLimit: number;
   cloudCredits: number;
 }
 

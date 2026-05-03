@@ -671,3 +671,28 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
 .upgrade-cta-text strong { display: block; margin-bottom: 0.35rem; }
 .upgrade-cta-text p { font-size: 0.85rem; color: var(--text-muted); margin: 0; line-height: 1.4; }
 .upgrade-cta-btn { width: auto; white-space: nowrap; flex-shrink: 0; }
+
+/* ── License-required banner (free tier) ──────────────────────────────────── */
+.license-required-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: linear-gradient(135deg, rgba(255,70,85,0.12), rgba(255,70,85,0.06));
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.license-required-banner:hover { background: linear-gradient(135deg, rgba(255,70,85,0.2), rgba(255,70,85,0.1)); }
+.license-required-banner strong { display: block; margin-bottom: 0.25rem; }
+.license-required-banner p { font-size: 0.83rem; color: var(--text-muted); margin: 0; }
+
+/* ── First-payment bonus highlight in modal ────────────────────────────────── */
+.bonus-highlight {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: var(--warning);
+}
