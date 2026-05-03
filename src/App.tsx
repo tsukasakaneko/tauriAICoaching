@@ -6,6 +6,7 @@ import FormScreen from "./components/FormScreen";
 import ReportScreen from "./components/ReportScreen";
 import AutoRecordScreen from "./components/AutoRecordScreen";
 import SettingsScreen from "./components/SettingsScreen";
+import UpgradeModal from "./components/UpgradeModal";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("login");
@@ -13,6 +14,7 @@ export default function App() {
   const [report, setReport] = useState<CoachingReport | null>(null);
   const [videoAnalysis, setVideoAnalysis] = useState<VideoAnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -74,6 +76,7 @@ export default function App() {
           onLogout={handleLogout}
           onAutoRecord={() => setScreen("autorecord")}
           onSettings={() => setScreen("settings")}
+          onUpgradeNeeded={() => setShowUpgradeModal(true)}
         />
       )}
 
@@ -84,6 +87,14 @@ export default function App() {
             setVideoAnalysis(null);
             setScreen("form");
           }}
+          onUpgrade={() => setShowUpgradeModal(true)}
+        />
+      )}
+
+      {showUpgradeModal && (
+        <UpgradeModal
+          onClose={() => setShowUpgradeModal(false)}
+          onGoToSettings={() => { setShowUpgradeModal(false); setScreen("settings"); }}
         />
       )}
 

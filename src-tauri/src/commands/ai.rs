@@ -11,7 +11,7 @@ const KEY_AI_CONFIG: &str = "ai_config";
 const KEY_LICENSE_TIER: &str = "license_tier";
 const KEY_ANALYSIS_COUNT: &str = "analysis_count";
 const KEY_CLOUD_CREDITS: &str = "cloud_credits";
-const FREE_TIER_LIMIT: u32 = 3;
+const FREE_TIER_LIMIT: u32 = 5;
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -1,11 +1,22 @@
+import { useEffect, useState } from "react";
 import type { CoachingReport } from "../types";
+import { tauriApi } from "../api";
 
 interface Props {
   report: CoachingReport;
   onBack: () => void;
+  onUpgrade: () => void;
 }
 
-export default function ReportScreen({ report, onBack }: Props) {
+export default function ReportScreen({ report, onBack, onUpgrade }: Props) {
+  const [isFree, setIsFree] = useState(false);
+
+  useEffect(() => {
+    tauriApi.getUsageStatus()
+      .then((s) => setIsFree(s.tier === "free"))
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="screen report-screen">
       <div className="report-nav">
@@ -68,6 +79,16 @@ export default function ReportScreen({ report, onBack }: Props) {
           ))}
         </ol>
       </section>
+
+      {isFree && (
+        <div className="upgrade-cta-banner" onClick={onUpgrade}>
+          <div className="upgrade-cta-text">
+            <strong>気に入っていただけましたか？</strong>
+            <p>無料プランを使い切る前にアップグレードして、毎試合コーチングを受け続けましょう。</p>
+          </div>
+          <button className="primary-btn upgrade-cta-btn">アップグレード →</button>
+        </div>
+      )}
     </div>
   );
 }

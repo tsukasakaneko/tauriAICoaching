@@ -10,22 +10,25 @@ const router = express.Router();
 // Singleton Anthropic client — created once, reused for every request
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// Per-user daily rate limit (in-memory; resets naturally at process restart / midnight rollover)
-// Free users: 3/day  Paid users: 20/day
-const DAILY_LIMIT_FREE = 3;
+// Per-user daily rate limit — persisted in the daily_usage table so restarts don't reset counts.
+// Free users: 5/day  Paid users: 20/day
+const DAILY_LIMIT_FREE = 5;
 const DAILY_LIMIT_PAID = 20;
-const _dailyUsage = new Map(); // userId → { date: string, count: number }
+
+const _stmtUpsert = db.prepare(`
+  INSERT INTO daily_usage (user_id, date, count) VALUES (?, ?, 1)
+  ON CONFLICT (user_id, date) DO UPDATE SET count = count + 1
+`);
+const _stmtGet = db.prepare(
+  `SELECT count FROM daily_usage WHERE user_id = ? AND date = ?`
+);
 
 function checkDailyLimit(userId, isPaid) {
   const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
-  const entry = _dailyUsage.get(userId);
-  if (!entry || entry.date !== today) {
-    _dailyUsage.set(userId, { date: today, count: 0 });
-  }
-  const rec = _dailyUsage.get(userId);
   const limit = isPaid ? DAILY_LIMIT_PAID : DAILY_LIMIT_FREE;
-  if (rec.count >= limit) return false;
-  rec.count += 1;
+  const row = _stmtGet.get(userId, today);
+  if (row && row.count >= limit) return false;
+  _stmtUpsert.run(userId, today);
   return true;
 }
 

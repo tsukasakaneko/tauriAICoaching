@@ -50,6 +50,12 @@ function loadSavedField<T>(key: string, fallback: T): T {
   }
 }
 
+// Trigger the upgrade modal for these errors instead of showing inline text
+const LIMIT_ERROR_PATTERNS = ["上限", "クレジットが不足", "有効期限が切れ"];
+function isLimitError(msg: string) {
+  return LIMIT_ERROR_PATTERNS.some((p) => msg.includes(p));
+}
+
 interface Props {
   user: User;
   videoAnalysis: VideoAnalysisResult | null;
@@ -57,6 +63,7 @@ interface Props {
   onLogout: () => void;
   onAutoRecord: () => void;
   onSettings: () => void;
+  onUpgradeNeeded: () => void;
 }
 
 export default function FormScreen({
@@ -66,6 +73,7 @@ export default function FormScreen({
   onLogout,
   onAutoRecord,
   onSettings,
+  onUpgradeNeeded,
 }: Props) {
   const [rank, setRank] = useState<Rank>(() => loadSavedField<Rank>("rank", "シルバー"));
   const [agent, setAgent] = useState(() => loadSavedField("agent", ""));
@@ -129,7 +137,12 @@ export default function FormScreen({
       const result = await tauriApi.analyze(formData, videoAnalysis);
       onReportReady(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "分析に失敗しました");
+      const msg = err instanceof Error ? err.message : "分析に失敗しました";
+      if (isLimitError(msg)) {
+        onUpgradeNeeded();
+      } else {
+        setError(msg);
+      }
     } finally {
       if (stepTimerRef.current !== null) {
         clearInterval(stepTimerRef.current);
@@ -142,6 +155,14 @@ export default function FormScreen({
   const remainingFree =
     usageStatus?.tier === "free"
       ? Math.max(0, usageStatus.freeLimit - usageStatus.analysisCount)
+      : null;
+
+  // Show a proactive warning before the user hits a hard wall
+  const lowCreditsWarning =
+    usageStatus?.tier === "cloud" && usageStatus.cloudCredits <= 5 && usageStatus.cloudCredits > 0
+      ? `クラウドクレジット残り ${usageStatus.cloudCredits} 回です。VCREDITキーで補充してください。`
+      : remainingFree === 1
+      ? "無料プランの残り分析回数はあと1回です。アップグレードをご検討ください。"
       : null;
 
   return (
@@ -175,6 +196,12 @@ export default function FormScreen({
       </header>
 
       <h2 className="form-title">コーチングフォーム</h2>
+
+      {lowCreditsWarning && (
+        <div className="low-credits-banner" onClick={onUpgradeNeeded}>
+          ⚠ {lowCreditsWarning}
+        </div>
+      )}
 
       {!videoAnalysis && (
         <div className="autorecord-cta" onClick={onAutoRecord}>
