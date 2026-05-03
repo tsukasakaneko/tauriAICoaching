@@ -106,7 +106,10 @@ export default function App() {
       )}
 
       {screen === "settings" && (
-        <SettingsScreen onBack={() => setScreen("form")} />
+        <SettingsScreen
+          onBack={() => setScreen("form")}
+          onAccountDeleted={handleLogout}
+        />
       )}
     </div>
   );

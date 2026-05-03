@@ -57,6 +57,8 @@ export const api = {
 
   getMe: () => request<User>("/me"),
 
+  deleteAccount: () => request<{ ok: boolean }>("/me", { method: "DELETE" }),
+
   // Auto-record endpoints
   startMonitoring: () =>
     request<{ ok: boolean; state: string }>("/autorecord/start", { method: "POST" }),

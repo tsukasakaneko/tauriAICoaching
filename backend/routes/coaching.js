@@ -58,6 +58,24 @@ router.get("/me", requireAuth, (req, res) => {
   });
 });
 
+// DELETE /me — GDPR Right to Erasure: permanently delete the account and all associated data
+router.delete("/me", requireAuth, (req, res) => {
+  const userId = req.user.id;
+  // Use a transaction so all deletes succeed or all roll back atomically
+  const deleteAll = db.transaction(() => {
+    db.prepare("DELETE FROM daily_usage    WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM match_sessions WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM users          WHERE id      = ?").run(userId);
+  });
+  try {
+    deleteAll();
+    res.json({ ok: true, message: "アカウントとすべての関連データを削除しました" });
+  } catch (err) {
+    console.error("Account deletion error:", err);
+    res.status(500).json({ message: "アカウントの削除に失敗しました" });
+  }
+});
+
 // POST /analyze
 router.post("/analyze", requireAuth, async (req, res) => {
   if (!checkDailyLimit(req.user.id, req.user.is_paid === 1)) {
@@ -71,6 +89,25 @@ router.post("/analyze", requireAuth, async (req, res) => {
 
   if (!rank || !agent) {
     return res.status(400).json({ message: "ランクとエージェントは必須です" });
+  }
+
+  // Enforce input length limits to prevent oversized payloads reaching the AI API
+  const MAX_AGENT_LEN = 60;
+  const MAX_REVIEW_LEN = 2000;
+  const MAX_ASSESSMENT_ITEMS = 10;
+  const MAX_ASSESSMENT_ITEM_LEN = 100;
+
+  if (typeof agent !== "string" || agent.length > MAX_AGENT_LEN) {
+    return res.status(400).json({ message: `エージェント名は${MAX_AGENT_LEN}文字以内で入力してください` });
+  }
+  if (review && (typeof review !== "string" || review.length > MAX_REVIEW_LEN)) {
+    return res.status(400).json({ message: `振り返りは${MAX_REVIEW_LEN}文字以内で入力してください` });
+  }
+  if (selfAssessment) {
+    if (!Array.isArray(selfAssessment) || selfAssessment.length > MAX_ASSESSMENT_ITEMS
+      || selfAssessment.some((s) => typeof s !== "string" || s.length > MAX_ASSESSMENT_ITEM_LEN)) {
+      return res.status(400).json({ message: "自己評価の値が不正です" });
+    }
   }
 
   const assessmentText =

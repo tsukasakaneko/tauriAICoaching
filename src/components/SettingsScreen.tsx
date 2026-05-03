@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import type { AiConfig, AiProvider, LicenseStatus, UsageStatus } from "../types";
-import { tauriApi } from "../api";
+import { api, tauriApi } from "../api";
 
 interface Props {
   onBack: () => void;
+  onAccountDeleted: () => void;
 }
 
-export default function SettingsScreen({ onBack }: Props) {
+export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
   const [config, setConfig] = useState<AiConfig>({
     provider: "cloud",
     claude_api_key: null,
@@ -22,6 +23,8 @@ export default function SettingsScreen({ onBack }: Props) {
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -89,6 +92,19 @@ export default function SettingsScreen({ onBack }: Props) {
       flash(err instanceof Error ? err.message : "有効化に失敗しました", true);
     } finally {
       setActivating(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await api.deleteAccount();
+      onAccountDeleted();
+    } catch (err) {
+      flash(err instanceof Error ? err.message : "削除に失敗しました", true);
+      setDeleteConfirm(false);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -269,6 +285,42 @@ export default function SettingsScreen({ onBack }: Props) {
           >
             {saving ? "保存中..." : "設定を保存"}
           </button>
+        </section>
+
+        {/* ── Account Deletion Section (GDPR Right to Erasure) ─── */}
+        <section className="settings-section danger-zone">
+          <h3>アカウント管理</h3>
+          <p className="hint-text">
+            アカウントを削除すると、すべての分析履歴・個人情報が完全に削除され、復元できません。
+          </p>
+          {!deleteConfirm ? (
+            <button
+              className="danger-btn"
+              onClick={() => setDeleteConfirm(true)}
+            >
+              アカウントを削除する
+            </button>
+          ) : (
+            <div className="delete-confirm-box">
+              <p>本当に削除しますか？この操作は取り消せません。</p>
+              <div className="delete-confirm-actions">
+                <button
+                  className="danger-btn"
+                  onClick={handleDeleteAccount}
+                  disabled={deleting}
+                >
+                  {deleting ? "削除中..." : "はい、削除します"}
+                </button>
+                <button
+                  className="text-btn"
+                  onClick={() => setDeleteConfirm(false)}
+                  disabled={deleting}
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
       </div>
