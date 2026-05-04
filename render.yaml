@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: valorant-coaching-api
+    env: node
+    plan: free
+    rootDir: backend-remote
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false          # Render ダッシュボードで手動設定
+      - key: JWT_SECRET
+        sync: false          # ローカル backend/.env と同じ値を設定
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-4-6
+      - key: NODE_ENV
+        value: production
