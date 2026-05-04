@@ -22,6 +22,10 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [testingCloud, setTestingCloud] = useState(false);
+  const [testingOllama, setTestingOllama] = useState(false);
+  const [cloudTestResult, setCloudTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [ollamaTestResult, setOllamaTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [activating, setActivating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -50,6 +54,37 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
     if (isError) { setErrorMsg(msg); setSuccessMsg(""); }
     else { setSuccessMsg(msg); setErrorMsg(""); }
     setTimeout(() => { setSuccessMsg(""); setErrorMsg(""); }, 4000);
+  };
+
+  const handleTestClaude = async () => {
+    const key = claudeKeyInput.trim() || config.claude_api_key || "";
+    if (!key) {
+      setCloudTestResult({ ok: false, msg: "APIキーを入力してください" });
+      return;
+    }
+    setTestingCloud(true);
+    setCloudTestResult(null);
+    try {
+      const msg = await tauriApi.testClaudeKey(key, config.claude_model);
+      setCloudTestResult({ ok: true, msg });
+    } catch (err) {
+      setCloudTestResult({ ok: false, msg: err instanceof Error ? err.message : "接続に失敗しました" });
+    } finally {
+      setTestingCloud(false);
+    }
+  };
+
+  const handleTestOllama = async () => {
+    setTestingOllama(true);
+    setOllamaTestResult(null);
+    try {
+      const msg = await tauriApi.testOllama(config.ollama_url, config.ollama_model);
+      setOllamaTestResult({ ok: true, msg });
+    } catch (err) {
+      setOllamaTestResult({ ok: false, msg: err instanceof Error ? err.message : "接続に失敗しました" });
+    } finally {
+      setTestingOllama(false);
+    }
   };
 
   const handleSaveConfig = async () => {
@@ -231,9 +266,21 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
                 <input
                   type="password"
                   value={claudeKeyInput}
-                  onChange={(e) => setClaudeKeyInput(e.target.value)}
+                  onChange={(e) => { setClaudeKeyInput(e.target.value); setCloudTestResult(null); }}
                   placeholder={config.claude_api_key ? "設定済み (変更する場合は入力)" : "sk-ant-..."}
                 />
+                <button
+                  className="text-btn test-btn"
+                  onClick={handleTestClaude}
+                  disabled={testingCloud}
+                >
+                  {testingCloud ? "確認中..." : "接続テスト"}
+                </button>
+                {cloudTestResult && (
+                  <p className={cloudTestResult.ok ? "success-msg" : "error"}>
+                    {cloudTestResult.ok ? "✓ " : "✗ "}{cloudTestResult.msg}
+                  </p>
+                )}
               </div>
               <div className="field">
                 <label>モデル</label>
@@ -256,7 +303,7 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
                 <input
                   type="text"
                   value={config.ollama_url}
-                  onChange={(e) => setConfig((c) => ({ ...c, ollama_url: e.target.value }))}
+                  onChange={(e) => { setConfig((c) => ({ ...c, ollama_url: e.target.value })); setOllamaTestResult(null); }}
                   placeholder="http://127.0.0.1:11434"
                 />
               </div>
@@ -265,12 +312,24 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
                 <input
                   type="text"
                   value={config.ollama_model}
-                  onChange={(e) => setConfig((c) => ({ ...c, ollama_model: e.target.value }))}
+                  onChange={(e) => { setConfig((c) => ({ ...c, ollama_model: e.target.value })); setOllamaTestResult(null); }}
                   placeholder="llama3.1:8b"
                 />
                 <p className="hint-text">
                   Ollamaがインストール済みであること。推奨: llama3.1:8b / qwen2.5:7b
                 </p>
+                <button
+                  className="text-btn test-btn"
+                  onClick={handleTestOllama}
+                  disabled={testingOllama}
+                >
+                  {testingOllama ? "確認中..." : "接続テスト"}
+                </button>
+                {ollamaTestResult && (
+                  <p className={ollamaTestResult.ok ? "success-msg" : "error"}>
+                    {ollamaTestResult.ok ? "✓ " : "✗ "}{ollamaTestResult.msg}
+                  </p>
+                )}
               </div>
             </>
           )}

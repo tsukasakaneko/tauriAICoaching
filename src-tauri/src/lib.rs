@@ -24,6 +24,8 @@ pub fn run() {
             commands::ai::get_ai_config,
             commands::ai::set_ai_config,
             commands::ai::get_usage_status,
+            commands::ai::test_claude_key,
+            commands::ai::test_ollama,
             commands::license::activate_license,
             commands::license::get_license_status,
         ])

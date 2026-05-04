@@ -12,6 +12,7 @@ import type {
 } from "./types";
 
 const BASE_URL = "http://127.0.0.1:3001";
+const REMOTE_API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
 function getToken(): string | null {
   return localStorage.getItem("token");
@@ -25,7 +26,7 @@ export function clearToken(): void {
   localStorage.removeItem("token");
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}, baseUrl = BASE_URL): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -34,7 +35,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  const res = await fetch(`${baseUrl}${path}`, { ...options, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: "Unknown error" }));
     throw new Error((err as { message?: string }).message || `HTTP ${res.status}`);
@@ -96,6 +97,22 @@ export const tauriApi = {
       },
     }),
 
+  // cloud tier + Cloud provider: routes through the remote server (developer's API key)
+  analyzeRemote: (
+    formData: CoachingFormData,
+    videoAnalysis: VideoAnalysisResult | null
+  ): Promise<CoachingReport> =>
+    request<CoachingReport>("/analyze", {
+      method: "POST",
+      body: JSON.stringify({
+        rank: formData.rank,
+        agent: formData.agent,
+        selfAssessment: formData.selfAssessment,
+        review: formData.review,
+        videoAnalysis: videoAnalysis ?? null,
+      }),
+    }, REMOTE_API_URL),
+
   getAiConfig: (): Promise<AiConfig> => invoke<AiConfig>("get_ai_config"),
 
   setAiConfig: (config: AiConfig): Promise<void> =>
@@ -107,4 +124,10 @@ export const tauriApi = {
     invoke<ActivationResult>("activate_license", { key }),
 
   getLicenseStatus: (): Promise<LicenseStatus> => invoke<LicenseStatus>("get_license_status"),
+
+  testClaudeKey: (apiKey: string, model: string): Promise<string> =>
+    invoke<string>("test_claude_key", { apiKey, model }),
+
+  testOllama: (url: string, model: string): Promise<string> =>
+    invoke<string>("test_ollama", { url, model }),
 };

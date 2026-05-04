@@ -7,6 +7,7 @@ import type {
   SelfAssessmentItem,
   VideoAnalysisResult,
   UsageStatus,
+  AiProvider,
 } from "../types";
 import { tauriApi } from "../api";
 
@@ -85,10 +86,12 @@ export default function FormScreen({
   const [error, setError] = useState("");
   const [analysisStep, setAnalysisStep] = useState(0);
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
+  const [aiProvider, setAiProvider] = useState<AiProvider>("cloud");
   const stepTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     tauriApi.getUsageStatus().then(setUsageStatus).catch(() => {});
+    tauriApi.getAiConfig().then((cfg) => setAiProvider(cfg.provider)).catch(() => {});
   }, []);
 
   // Persist form data across navigation
@@ -134,7 +137,11 @@ export default function FormScreen({
         selfAssessment,
         review,
       };
-      const result = await tauriApi.analyze(formData, videoAnalysis);
+      const isCloudTierRemote =
+        usageStatus?.tier === "cloud" && aiProvider === "cloud";
+      const result = isCloudTierRemote
+        ? await tauriApi.analyzeRemote(formData, videoAnalysis)
+        : await tauriApi.analyze(formData, videoAnalysis);
       onReportReady(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "分析に失敗しました";

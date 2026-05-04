@@ -1,14 +1,10 @@
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use ed25519_dalek::{Signature, VerifyingKey, Verifier};
 
-type HmacSha256 = Hmac<Sha256>;
-
-// Injected at compile time via LICENSE_HMAC_SECRET env var.
-// Falls back to a dev-only placeholder; production builds MUST set the env var.
-const HMAC_SECRET: &[u8] = match option_env!("LICENSE_HMAC_SECRET") {
-    Some(s) => s.as_bytes(),
-    None => b"dev-only-insecure-secret-not-for-production",
-};
+// Ed25519 public key (32 bytes, base64url-encoded without padding).
+// Set LICENSE_PUBLIC_KEY env var at build time for production.
+// Dev builds without this env var skip signature verification for convenience.
+const PUBLIC_KEY_B64: Option<&str> = option_env!("LICENSE_PUBLIC_KEY");
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type")]
@@ -26,57 +22,52 @@ pub struct LicenseInfo {
     pub raw_key: String,
 }
 
-// Key format: {PREFIX}-{XXXXXXXX}-{XXXXXXXX}
-// 16 hex chars total = 8 bytes:
-//   [0]    tier code (0x01=pro_lifetime, 0x02=cloud_monthly, 0x03=credit_10, 0x04=credit_30)
-//   [1]    expiry_year since 2020 (0xFF = no expiry)
-//   [2]    expiry_month 1-12 (0xFF = no expiry)
-//   [3]    nonce (random byte for uniqueness)
-//   [4..8] first 4 bytes of HMAC-SHA256(secret, bytes[0..4])
+// Key format: {PREFIX}-{base64url_no_pad(payload[4] + ed25519_sig[64])}
 //
+// payload layout (4 bytes):
+//   [0] tier code: 0x01=ProLifetime, 0x02=CloudMonthly, 0x03=Credit10, 0x04=Credit30
+//   [1] expiry_year since 2020 (0xFF = no expiry)
+//   [2] expiry_month 1–12      (0xFF = no expiry)
+//   [3] nonce (random byte for uniqueness)
+//
+// Total decoded: 68 bytes (4 payload + 64 Ed25519 signature)
 // Prefixes: VCOACH (0x01), VCLOUD (0x02), VCREDIT (0x03/0x04)
+//
+// Note: in debug builds without LICENSE_PUBLIC_KEY the signature check is skipped
+// so developers can test the activation flow before setting up their keypair.
 pub fn validate_key(key: &str) -> Result<LicenseInfo, String> {
-    let key = key.trim().to_uppercase();
-    let parts: Vec<&str> = key.split('-').collect();
+    let key = key.trim();
 
-    if parts.len() < 3 {
-        return Err("キーの形式が正しくありません".to_string());
-    }
+    let dash_pos = key.find('-').ok_or("キーの形式が正しくありません")?;
+    let prefix = key[..dash_pos].to_uppercase();
+    let body = &key[dash_pos + 1..];
 
-    let prefix = parts[0];
-    let hex_body: String = parts[1..].join("");
+    let decoded = URL_SAFE_NO_PAD.decode(body)
+        .map_err(|_| "キーに無効な文字が含まれています".to_string())?;
 
-    if hex_body.len() != 16 {
+    if decoded.len() != 68 {
         return Err("キーの長さが正しくありません".to_string());
     }
 
-    let body_bytes = hex::decode(&hex_body)
-        .map_err(|_| "キーに無効な文字が含まれています".to_string())?;
+    let payload = &decoded[0..4];
+    let sig_bytes: &[u8; 64] = decoded[4..68]
+        .try_into()
+        .map_err(|_| "内部エラー: 署名サイズが不正です".to_string())?;
 
-    let tier_code = body_bytes[0];
-    let expiry_year = body_bytes[1];
-    let expiry_month = body_bytes[2];
-    let nonce = body_bytes[3];
-    let sig_given = &body_bytes[4..8];
+    verify_signature(payload, sig_bytes)?;
 
-    // Verify HMAC signature
-    let mut mac = HmacSha256::new_from_slice(HMAC_SECRET)
-        .map_err(|_| "内部エラー: HMAC初期化失敗".to_string())?;
-    mac.update(&body_bytes[0..4]);
-    let sig_computed = mac.finalize().into_bytes();
+    let tier_code = payload[0];
+    let expiry_year = payload[1];
+    let expiry_month = payload[2];
+    let nonce = payload[3];
 
-    if sig_computed[0..4] != *sig_given {
-        return Err("キーが無効です".to_string());
-    }
-
-    // Verify prefix matches tier code
-    let tier = match (tier_code, prefix) {
+    let tier = match (tier_code, prefix.as_str()) {
         (0x01, "VCOACH") => LicenseTier::ProLifetime,
         (0x02, "VCLOUD") => {
-            if expiry_year != 0xFF && expiry_month != 0xFF {
-                if is_expired(expiry_year, expiry_month) {
-                    return Err("このキーは有効期限切れです".to_string());
-                }
+            if expiry_year != 0xFF && expiry_month != 0xFF
+                && is_expired(expiry_year, expiry_month)
+            {
+                return Err("このキーは有効期限切れです".to_string());
             }
             LicenseTier::CloudMonthly { expiry_year, expiry_month }
         }
@@ -92,24 +83,45 @@ pub fn validate_key(key: &str) -> Result<LicenseInfo, String> {
     })
 }
 
-/// Returns `(expiry_year_since_2020, expiry_month)` for a CloudMonthly key, or `None`
-/// for keys with no expiry or if the key cannot be parsed.
+fn verify_signature(payload: &[u8], sig_bytes: &[u8; 64]) -> Result<(), String> {
+    match PUBLIC_KEY_B64 {
+        Some(pub_key_b64) => {
+            let pub_key_bytes = URL_SAFE_NO_PAD.decode(pub_key_b64)
+                .map_err(|_| "内部エラー: 公開鍵が不正です".to_string())?;
+            let pub_key_array: &[u8; 32] = pub_key_bytes.as_slice()
+                .try_into()
+                .map_err(|_| "内部エラー: 公開鍵のサイズが不正です".to_string())?;
+            let verifying_key = VerifyingKey::from_bytes(pub_key_array)
+                .map_err(|_| "内部エラー: 公開鍵の読み込みに失敗しました".to_string())?;
+            let signature = Signature::from_bytes(sig_bytes);
+            verifying_key.verify(payload, &signature)
+                .map_err(|_| "キーが無効です".to_string())
+        }
+        None => {
+            if cfg!(debug_assertions) {
+                Ok(()) // Dev builds without LICENSE_PUBLIC_KEY: skip verification
+            } else {
+                Err("内部エラー: LICENSE_PUBLIC_KEY が設定されていません".to_string())
+            }
+        }
+    }
+}
+
+/// Returns `(expiry_year_since_2020, expiry_month)` for a CloudMonthly key, or `None`.
 pub fn get_cloud_expiry(raw_key: &str) -> Option<(u8, u8)> {
-    let key = raw_key.trim().to_uppercase();
-    let parts: Vec<&str> = key.split('-').collect();
-    if parts.len() < 3 { return None; }
-    let hex_body: String = parts[1..].join("");
-    if hex_body.len() != 16 { return None; }
-    let Ok(body_bytes) = hex::decode(&hex_body) else { return None; };
-    if body_bytes[0] != 0x02 { return None; } // Not a CloudMonthly key
-    let expiry_year = body_bytes[1];
-    let expiry_month = body_bytes[2];
-    if expiry_year == 0xFF { return None; } // Permanent — no expiry
+    let key = raw_key.trim();
+    let dash_pos = key.find('-')?;
+    let body = &key[dash_pos + 1..];
+    let decoded = URL_SAFE_NO_PAD.decode(body).ok()?;
+    if decoded.len() != 68 { return None; }
+    if decoded[0] != 0x02 { return None; } // Not CloudMonthly
+    let expiry_year = decoded[1];
+    let expiry_month = decoded[2];
+    if expiry_year == 0xFF { return None; } // No expiry
     Some((expiry_year, expiry_month))
 }
 
 /// Returns `true` if a stored CloudMonthly raw key has passed its expiry month.
-/// Non-cloud keys always return `false` (they don't expire this way).
 pub fn cloud_subscription_expired(raw_key: &str) -> bool {
     match get_cloud_expiry(raw_key) {
         Some((year, month)) => is_expired(year, month),
@@ -122,6 +134,5 @@ fn is_expired(expiry_year_since_2020: u8, expiry_month: u8) -> bool {
     let now = Local::now();
     let key_year = 2020i32 + expiry_year_since_2020 as i32;
     let key_month = expiry_month as u32;
-    // Key is valid through the end of key_month; expired when current month is past it
     now.year() > key_year || (now.year() == key_year && now.month() > key_month)
 }

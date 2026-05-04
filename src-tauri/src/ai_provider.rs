@@ -199,6 +199,100 @@ async fn call_ollama(
     Ok(ollama_resp.message.content)
 }
 
+pub async fn test_claude_connection(
+    client: &reqwest::Client,
+    api_key: &str,
+    model: &str,
+) -> Result<(), String> {
+    #[derive(Serialize)]
+    struct Req<'a> {
+        model: &'a str,
+        max_tokens: u32,
+        messages: Vec<Msg<'a>>,
+    }
+    #[derive(Serialize)]
+    struct Msg<'a> {
+        role: &'a str,
+        content: &'a str,
+    }
+
+    let body = Req {
+        model,
+        max_tokens: 1,
+        messages: vec![Msg { role: "user", content: "hi" }],
+    };
+
+    let res = client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Claude APIへの接続に失敗しました: {}", e))?;
+
+    match res.status().as_u16() {
+        200..=299 => Ok(()),
+        401 => Err("Claude APIキーが無効です。正しいキーを入力してください。".to_string()),
+        status => Err(format!("Claude API エラー ({})", status)),
+    }
+}
+
+pub async fn test_ollama_connection(
+    client: &reqwest::Client,
+    url: &str,
+    model: &str,
+) -> Result<String, String> {
+    #[derive(Deserialize)]
+    struct TagsResponse {
+        models: Vec<ModelInfo>,
+    }
+    #[derive(Deserialize)]
+    struct ModelInfo {
+        name: String,
+    }
+
+    let tags_url = format!("{}/api/tags", url.trim_end_matches('/'));
+
+    let res = client
+        .get(&tags_url)
+        .send()
+        .await
+        .map_err(|_| "Ollamaへの接続に失敗しました。Ollamaが起動しているか確認してください。".to_string())?;
+
+    if !res.status().is_success() {
+        return Err(format!("Ollama エラー ({})", res.status()));
+    }
+
+    let tags: TagsResponse = res
+        .json()
+        .await
+        .map_err(|_| "Ollamaのレスポンスを解析できませんでした".to_string())?;
+
+    let model_base = model.split(':').next().unwrap_or(model);
+    let found = tags.models.iter().any(|m| {
+        m.name == model
+            || m.name.starts_with(&format!("{}:", model_base))
+            || m.name == model_base
+    });
+
+    if found {
+        Ok(format!("Ollamaへの接続に成功しました。モデル {} を確認しました。", model))
+    } else if tags.models.is_empty() {
+        Err(format!(
+            "Ollamaに接続できましたが、モデルが見つかりません。`ollama pull {}` を実行してください。",
+            model
+        ))
+    } else {
+        let available: Vec<&str> = tags.models.iter().map(|m| m.name.as_str()).collect();
+        Err(format!(
+            "Ollamaに接続できましたが、モデル {} が見つかりません。`ollama pull {}` を実行してください。利用可能: {}",
+            model, model, available.join(", ")
+        ))
+    }
+}
+
 fn strip_code_fences(raw: &str) -> &str {
     let s = raw.trim();
     // Claude sometimes wraps JSON in ```json ... ``` or ``` ... ``` fences
