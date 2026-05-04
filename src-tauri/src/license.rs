@@ -97,11 +97,13 @@ fn verify_signature(payload: &[u8], sig_bytes: &[u8; 64]) -> Result<(), String> 
             verifying_key.verify(payload, &signature)
                 .map_err(|_| "キーが無効です".to_string())
         }
-        // Dev builds without LICENSE_PUBLIC_KEY: skip verification
-        #[cfg(debug_assertions)]
-        None => Ok(()),
-        #[cfg(not(debug_assertions))]
-        None => Err("内部エラー: LICENSE_PUBLIC_KEY が設定されていません".to_string()),
+        None => {
+            if cfg!(debug_assertions) {
+                Ok(()) // Dev builds without LICENSE_PUBLIC_KEY: skip verification
+            } else {
+                Err("内部エラー: LICENSE_PUBLIC_KEY が設定されていません".to_string())
+            }
+        }
     }
 }
 
