@@ -1,0 +1,64 @@
+{
+  "in_scope": {
+    "components": [
+      "src-tauri/src/license.rs — License key validation and Ed25519 signature verification",
+      "src-tauri/src/ai_provider.rs — Claude API and Ollama HTTP dispatch",
+      "src-tauri/src/commands/ai.rs — Tauri IPC commands for AI analysis",
+      "src-tauri/src/commands/license.rs — Tauri IPC commands for license activation",
+      "backend/routes/auth.js — JWT registration and login endpoints",
+      "backend/routes/coaching.js — AI coaching analysis endpoint",
+      "backend/routes/autorecord.js — Auto-record workflow endpoints",
+      "backend/server.js — Express server setup, CORS policy, JWT secret validation",
+      "backend/db.js — SQLite database layer"
+    ],
+    "scope_restriction": "Desktop application security: authentication, license enforcement, API key handling, input validation, SSRF in Ollama URL handling. Network attack surface is loopback-only (127.0.0.1:3001)."
+  },
+  "out_of_scope": [
+    "UI/UX issues with no security impact",
+    "Rate limiting bypass via IPv6 vs IPv4 differences (informational only)",
+    "Missing HTTPS (loopback-only server, no transport encryption required)",
+    "Game capture logic (YOLO inference, killfeed OCR) — no security-sensitive data",
+    "Build toolchain or dependency vulnerabilities unrelated to the application logic",
+    "Physical access attacks (attacker has full local machine access)"
+  ],
+  "conditional_scope": [
+    "Tauri IPC privilege escalation — in scope if exploitable from the webview without user interaction",
+    "Ollama SSRF — in scope if the ollama_url allows reaching non-loopback internal services",
+    "JWT token storage in Tauri store — in scope if the store is readable by other processes"
+  ],
+  "trust_assumptions": {
+    "frontend_webview": {
+      "trust_level": "SEMI_TRUSTED",
+      "rationale": "The Tauri webview runs sandboxed React/TypeScript code. It can call Tauri IPC commands but cannot directly access Rust memory or the OS. Treat webview-sourced inputs as semi-trusted."
+    },
+    "backend_local_api": {
+      "trust_level": "TRUSTED",
+      "rationale": "The Express.js backend listens on 127.0.0.1:3001 only. Network requests come from the Tauri webview or the Rust layer. External network access is blocked by the loopback binding."
+    },
+    "user_configuration": {
+      "trust_level": "UNTRUSTED",
+      "rationale": "Values entered by the user (license keys, API keys, Ollama URL, recording output path) are untrusted and must be validated before use."
+    },
+    "anthropic_api": {
+      "trust_level": "TRUSTED",
+      "rationale": "Responses from the Anthropic Claude API are treated as trusted content for coaching, but the response structure must be validated before deserialization."
+    },
+    "ollama_local": {
+      "trust_level": "SEMI_TRUSTED",
+      "rationale": "Ollama is a locally-running service. The URL is user-configurable, introducing SSRF risk if not validated."
+    }
+  },
+  "severity_classification": {
+    "CRITICAL": "License bypass allowing unauthorized tier access in production builds; JWT secret exposure allowing token forgery; Claude API key exfiltration to external party",
+    "HIGH": "SSRF via Ollama URL allowing internal network probing; SQL injection in auth routes; path traversal allowing write to system directories",
+    "MEDIUM": "Rate limiting bypass; user enumeration via timing or differential responses; missing authentication on coaching endpoints",
+    "LOW": "Debug-mode signature bypass (acceptable in debug builds); minor input validation gaps with no direct exploit path; missing error message sanitization"
+  },
+  "deployment_context": {
+    "type": "single-implementation",
+    "target_share": {
+      "value": 1.0,
+      "metric": "desktop-app-install-share"
+    }
+  }
+}
