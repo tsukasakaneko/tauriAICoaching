@@ -6,60 +6,56 @@
 **Date:** 2026-05-06  
 **Total Cost:** ~$5.16 USD
 
+> **Audit Note:** The initial SPECA run did not clone the target repository into
+> `target_workspace/`, so Phase 03 fell back to analyzing SPECA's own CLI code
+> instead of tauriAICoaching. The Medium CSRF finding in the original report was
+> therefore invalid (it described a SPECA-internal vendored module). This
+> corrected report reflects manual code review of the actual tauriAICoaching
+> sources alongside the SPECA-generated property checklist.
+
 ---
 
 ## Executive Summary
 
-SPECA analyzed 3 specification files (license key validation, authentication/authorization, API security) and generated 35 security properties across 25 subgraphs. After code audit and false-positive review:
+Three specification files were audited (license key validation, authentication/authorization, API security), producing 35 security properties across 25 subgraphs. Manual code verification of the actual sources against these properties found:
 
 | Severity | Count |
 |----------|-------|
 | Medium   | 1     |
-| Informational | 34 |
+| Informational | 2 |
+| Not a Vulnerability | 2 |
 
 ---
 
 ## Findings
 
-### [MEDIUM] M-01 — Optional `expectedState` Allows Silent CSRF Bypass in OAuth Exchange
+### [MEDIUM] M-01 — Missing SSRF Validation on User-Configurable Ollama URL
 
-**Property ID:** PROP-license-key-inv-013  
-**Location:** `cli/src/auth/auth.ts` — `exchange()` — Lines 168–188  
-**Classification:** CONFIRMED_POTENTIAL  
+**Property ID:** INV-AI-002  
+**Location:** `src-tauri/src/ai_provider.rs` — `call_ollama()` line 172, `test_ollama_connection()` line 256  
+**Related command:** `src-tauri/src/commands/ai.rs` — `set_ai_config()` / `test_ollama()`
 
 **Description**
 
-The `exchange` function declares its fourth parameter as `expectedState?: string` (optional). The CSRF guard on line 181 reads:
+`AiConfig.ollama_url` is a plain `String` that users can set freely through the settings UI. It is used without any host or scheme validation:
 
-```typescript
-if (expectedState && callback.state !== expectedState) {
-  throw new Error("State mismatch");
-}
+```rust
+// ai_provider.rs:172
+let url = format!("{}/api/chat", base_url);
+
+// ai_provider.rs:256
+let tags_url = format!("{}/api/tags", url.trim_end_matches('/'));
 ```
 
-When `expectedState` is omitted, the short-circuit evaluation silently skips the check, accepting any OAuth callback state unconditionally.
+Because `set_ai_config` stores any URL the frontend sends and `test_ollama` fires a request to any URL passed in, an attacker who can write to the settings store (e.g. via a malicious extension, XSS in the Tauri webview, or local access) can redirect Ollama requests to arbitrary internal services.
 
 **Impact**
 
-A caller that invokes `exchange(pasted, verifier, redirectUri)` without supplying `expectedState` would complete an OAuth login regardless of state mismatch. An attacker who tricks the user into pasting an attacker-initiated authorization code (e.g., via a phishing page that mimics the OAuth callback) would bind the session to the attacker's identity rather than the user's.
-
-**Current Exposure**
-
-The sole audited production caller (`cli/src/commands/auth/login.tsx:110`) passes `authn.state` correctly, so no active exploit path exists in the audited code. However, the login.tsx implementation comment explicitly acknowledges additional callers in the "M2" Ink TUI / `speca init` flow outside this codebase, and the exported optional-parameter contract provides no compile-time guarantee that future callers supply state.
+Server-Side Request Forgery (SSRF): internal services that are not exposed externally (metadata endpoints, other localhost services) can be probed or interacted with using the Tauri process's network privileges.
 
 **Recommendation**
 
-Make `expectedState` a required parameter, or rename it to `requiredState` and remove the truthiness short-circuit:
-
-```typescript
-// Before (unsafe)
-if (expectedState && callback.state !== expectedState) { ... }
-
-// After (safe)
-if (callback.state !== expectedState) { ... }
-```
-
-Alternatively, enforce CSRF validation unconditionally inside `exchange` using the stored nonce, and remove the parameter entirely.
+Validate `ollama_url` before saving and before use: only allow `http`/`https` scheme with a host that is loopback (`127.0.0.0/8`, `::1`, `localhost`) or RFC-1918 private range (`10/8`, `172.16/12`, `192.168/16`).
 
 ---
 
@@ -67,17 +63,17 @@ Alternatively, enforce CSRF validation unconditionally inside `exchange` using t
 
 ### I-01 — PROP-license-key-inv-014 & inv-015 (Not a Vulnerability)
 
-Phase 03 classified these as `not-a-vulnerability`. The properties relate to license key expiry checks and tier-code validation; the implementation matches the specification with no exploitable deviation.
+Properties relate to license key expiry checks and tier-code validation. Manual review of `src-tauri/src/license.rs` confirms the implementation matches the specification with no exploitable deviation.
 
-### I-02 — 32 out-of-scope Properties
+### I-02 — 32 Properties Unverified Due to Missing `target_workspace/` Clone
 
-32 of 35 properties could not be verified because the Tauri desktop-app backend (Rust source files in `src-tauri/`) and several TypeScript modules were not present in the cloned workspace at the time of the audit. These include:
+The SPECA pipeline's `target_workspace/` was never populated, so 32 of 35 properties could not be verified automatically. Manual review confirmed the following invariants hold in code:
 
-- `verify_signature` (Ed25519 — `INV-LIC-001`)
-- `activate_license`, `get_cloud_expiry`, `is_expired` (license lifecycle)
-- API rate-limiting and token refresh flows
+- All 9 auth invariants (`backend/routes/auth.js`, `backend/server.js`) ✅
+- All 6 license invariants (`src-tauri/src/license.rs`) ✅
+- 9 of 10 API security invariants — **INV-AI-002 (Ollama URL validation) is unimplemented** ❌
 
-**Action:** Re-run the audit with the full repository workspace cloned into `target_workspace/` to cover these properties.
+**Action:** Re-run SPECA with `target_workspace/` cloned to get automated coverage for the remaining properties.
 
 ---
 
@@ -88,5 +84,5 @@ Phase 03 classified these as `not-a-vulnerability`. The properties relate to lic
 | 01b | Subgraph Extraction | 25 subgraphs from 3 specs |
 | 01e | Security Property Generation | 35 properties |
 | 02c | Code Location Pre-resolution | 35 properties resolved |
-| 03  | Audit Map Generation | 35 items audited |
-| 04  | False-Positive Review | 1 confirmed, 34 informational |
+| 03  | Audit Map Generation | 35 items audited (wrong workspace) |
+| 04  | False-Positive Review | Manual review substituted |

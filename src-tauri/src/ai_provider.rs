@@ -51,6 +51,50 @@ pub struct Summary {
     pub focus: String,
 }
 
+/// Validates that an Ollama URL is restricted to loopback or RFC-1918 private
+/// addresses to prevent SSRF. Accepts http/https only.
+pub fn validate_ollama_url(raw: &str) -> Result<(), String> {
+    let parsed = reqwest::Url::parse(raw)
+        .map_err(|_| "Ollama URL の形式が正しくありません".to_string())?;
+
+    match parsed.scheme() {
+        "http" | "https" => {}
+        _ => return Err("Ollama URL は http:// または https:// で始まる必要があります".to_string()),
+    }
+
+    let host = parsed.host_str()
+        .ok_or_else(|| "Ollama URL にホストが指定されていません".to_string())?;
+
+    if host == "localhost" {
+        return Ok(());
+    }
+
+    // Strip brackets from IPv6 literals before parsing
+    let ip: std::net::IpAddr = host.trim_matches(|c| c == '[' || c == ']')
+        .parse()
+        .map_err(|_| "Ollama URL のホストは loopback またはプライベート IP アドレスである必要があります".to_string())?;
+
+    if ip.is_loopback() {
+        return Ok(());
+    }
+
+    let is_private = match ip {
+        std::net::IpAddr::V4(v4) => {
+            let o = v4.octets();
+            o[0] == 10
+                || (o[0] == 172 && (16..=31).contains(&o[1]))
+                || (o[0] == 192 && o[1] == 168)
+        }
+        std::net::IpAddr::V6(_) => false,
+    };
+
+    if is_private {
+        Ok(())
+    } else {
+        Err("Ollama URL はローカルまたはプライベートネットワークのアドレスのみ使用できます".to_string())
+    }
+}
+
 pub async fn call_ai(
     client: &reqwest::Client,
     config: &AiConfig,

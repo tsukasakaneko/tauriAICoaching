@@ -124,6 +124,8 @@ pub fn get_ai_config(app: AppHandle) -> AiConfig {
 
 #[tauri::command]
 pub fn set_ai_config(app: AppHandle, config: AiConfig) -> Result<(), String> {
+    crate::ai_provider::validate_ollama_url(&config.ollama_url)?;
+
     let final_config = if config.claude_api_key.as_deref().map(|k| k.contains("...")).unwrap_or(false) {
         let existing = load_ai_config(&app);
         AiConfig { claude_api_key: existing.claude_api_key, ..config }
@@ -154,6 +156,7 @@ pub async fn test_ollama(
     url: String,
     model: String,
 ) -> Result<String, String> {
+    crate::ai_provider::validate_ollama_url(&url)?;
     crate::ai_provider::test_ollama_connection(&http.0, &url, &model).await
 }
 
