@@ -61,7 +61,7 @@ pub fn activate_license(app: AppHandle, key: String) -> Result<ActivationResult,
             // Prevent re-activating the identical key to reset credits
             let current_key = store.get(KEY_LICENSE_KEY)
                 .and_then(|v| v.as_str().map(|s| s.to_string()));
-            if current_key.as_deref() == Some(&info.raw_key) {
+            if current_key.as_deref().map(|k| k.eq_ignore_ascii_case(&info.raw_key)).unwrap_or(false) {
                 return Err("このVCLOUDキーは既にアクティベート済みです。翌月分のキーを使用してください。".to_string());
             }
 

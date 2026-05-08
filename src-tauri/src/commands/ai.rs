@@ -99,6 +99,15 @@ pub async fn ai_analyze(
         _ => {} // "pro": unlimited
     }
 
+    const MAX_TOTAL_INPUT: usize = 10_000;
+    let total_input_len = payload.rank.len()
+        + payload.agent.len()
+        + payload.review.len()
+        + payload.self_assessment.iter().map(|s| s.len()).sum::<usize>();
+    if total_input_len > MAX_TOTAL_INPUT {
+        return Err("入力データが大きすぎます。各フィールドを短くしてください。".to_string());
+    }
+
     let system_prompt = build_system_prompt(&payload.agent, &payload.rank);
     let user_prompt = build_user_prompt(&payload);
 

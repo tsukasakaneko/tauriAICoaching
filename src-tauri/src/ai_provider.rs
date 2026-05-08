@@ -51,6 +51,26 @@ pub struct Summary {
     pub focus: String,
 }
 
+/// Rewrites `localhost` to `127.0.0.1` to prevent DNS rebinding attacks
+/// where `/etc/hosts` remaps localhost to an internal network address.
+fn normalize_ollama_url(raw: &str) -> String {
+    // Replace only the host portion; covers http://localhost, http://localhost/,
+    // and http://localhost:PORT patterns.
+    if let Some(rest) = raw.strip_prefix("http://localhost:") {
+        return format!("http://127.0.0.1:{}", rest);
+    }
+    if raw == "http://localhost" || raw.starts_with("http://localhost/") {
+        return raw.replacen("http://localhost", "http://127.0.0.1", 1);
+    }
+    if let Some(rest) = raw.strip_prefix("https://localhost:") {
+        return format!("https://127.0.0.1:{}", rest);
+    }
+    if raw == "https://localhost" || raw.starts_with("https://localhost/") {
+        return raw.replacen("https://localhost", "https://127.0.0.1", 1);
+    }
+    raw.to_string()
+}
+
 /// Validates that an Ollama URL is restricted to loopback or RFC-1918 private
 /// addresses to prevent SSRF. Accepts http/https only.
 pub fn validate_ollama_url(raw: &str) -> Result<(), String> {
@@ -213,6 +233,7 @@ async fn call_ollama(
         content: String,
     }
 
+    let base_url = normalize_ollama_url(base_url);
     let url = format!("{}/api/chat", base_url);
     let request_body = OllamaRequest {
         model,
@@ -297,6 +318,7 @@ pub async fn test_ollama_connection(
         name: String,
     }
 
+    let url = normalize_ollama_url(url);
     let tags_url = format!("{}/api/tags", url.trim_end_matches('/'));
 
     let res = client

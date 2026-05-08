@@ -198,6 +198,9 @@ router.get('/autorecord/status', (req, res) => {
 
 // Start monitoring
 router.post('/autorecord/start', requireAuth, (req, res) => {
+  if (req.user.is_paid !== 1) {
+    return res.status(403).json({ message: 'この機能はライセンスキーが必要です。' });
+  }
   if (screenMonitor.state !== 'idle' && screenMonitor.isRunning) {
     return res.json({ ok: true, state: screenMonitor.state, message: '既に監視中です' });
   }
@@ -207,6 +210,9 @@ router.post('/autorecord/start', requireAuth, (req, res) => {
 
 // Stop monitoring
 router.post('/autorecord/stop', requireAuth, (req, res) => {
+  if (req.user.is_paid !== 1) {
+    return res.status(403).json({ message: 'この機能はライセンスキーが必要です。' });
+  }
   screenMonitor.stop();
   screenRecorder.stop().catch(() => {});
   activeSessions.delete(req.user.id);
@@ -215,6 +221,9 @@ router.post('/autorecord/stop', requireAuth, (req, res) => {
 
 // Current status
 router.get('/autorecord/state', requireAuth, (req, res) => {
+  if (req.user.is_paid !== 1) {
+    return res.status(403).json({ message: 'この機能はライセンスキーが必要です。' });
+  }
   res.json({
     state: screenMonitor.state,
     isRecording: screenRecorder.isRecording,
@@ -223,6 +232,9 @@ router.get('/autorecord/state', requireAuth, (req, res) => {
 
 // Latest analysis for this user
 router.get('/autorecord/latest', requireAuth, (req, res) => {
+  if (req.user.is_paid !== 1) {
+    return res.status(403).json({ message: 'この機能はライセンスキーが必要です。' });
+  }
   const row = db.prepare(
     `SELECT video_analysis_json FROM match_sessions
      WHERE user_id = ? AND status = 'done'

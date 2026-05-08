@@ -6,6 +6,10 @@ const db = require("../db");
 const router = express.Router();
 const SALT_ROUNDS = 12;
 
+// Pre-computed hash used to equalize response timing when the user is not found,
+// preventing email enumeration via timing side-channel (bcrypt takes ~100ms).
+const DUMMY_HASH = '$2b$12$JrZ4JmtdtWBzsx1qsuti2eAluf3FqlhdnTjpGNauwoxEpTy35iW6i';
+
 // IP-based rate limit for auth endpoints — 5 attempts per 15 minutes.
 // Prevents brute-force and credential-stuffing attacks.
 const AUTH_MAX_ATTEMPTS = 5;
@@ -91,6 +95,7 @@ router.post("/login", authRateLimit, async (req, res) => {
   try {
     const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
     if (!user) {
+      await bcrypt.compare(password, DUMMY_HASH); // timing equalization
       return res.status(401).json({ message: "メールアドレスまたはパスワードが正しくありません" });
     }
 
