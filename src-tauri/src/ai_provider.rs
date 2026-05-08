@@ -51,22 +51,17 @@ pub struct Summary {
     pub focus: String,
 }
 
-/// Rewrites `localhost` to `127.0.0.1` to prevent DNS rebinding attacks
-/// where `/etc/hosts` remaps localhost to an internal network address.
+/// Rewrites `http://localhost` to `http://127.0.0.1` to prevent DNS rebinding
+/// attacks where `/etc/hosts` remaps localhost to an internal network address.
+/// HTTPS is intentionally left unchanged: a TLS certificate issued to `localhost`
+/// already prevents rebinding because the cert won't match a remapped IP.
 fn normalize_ollama_url(raw: &str) -> String {
-    // Replace only the host portion; covers http://localhost, http://localhost/,
-    // and http://localhost:PORT patterns.
+    // Normalize http://localhost[:PORT][/...] only — not https://.
     if let Some(rest) = raw.strip_prefix("http://localhost:") {
         return format!("http://127.0.0.1:{}", rest);
     }
     if raw == "http://localhost" || raw.starts_with("http://localhost/") {
         return raw.replacen("http://localhost", "http://127.0.0.1", 1);
-    }
-    if let Some(rest) = raw.strip_prefix("https://localhost:") {
-        return format!("https://127.0.0.1:{}", rest);
-    }
-    if raw == "https://localhost" || raw.starts_with("https://localhost/") {
-        return raw.replacen("https://localhost", "https://127.0.0.1", 1);
     }
     raw.to_string()
 }
