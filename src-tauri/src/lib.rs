@@ -16,7 +16,12 @@ pub struct HttpClient(pub reqwest::Client);
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .manage(HttpClient(reqwest::Client::new()))
+        .manage(HttpClient(
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(60))
+                .build()
+                .expect("Failed to build HTTP client"),
+        ))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
@@ -30,6 +35,21 @@ pub fn run() {
             commands::license::get_license_status,
         ])
         .setup(|app| {
+            // Restrict settings.json to owner-only (0o600) to protect stored API keys.
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if let Ok(dir) = app.path().app_local_data_dir() {
+                    let store_path = dir.join("settings.json");
+                    if store_path.exists() {
+                        let _ = std::fs::set_permissions(
+                            &store_path,
+                            std::fs::Permissions::from_mode(0o600),
+                        );
+                    }
+                }
+            }
+
             #[cfg(not(debug_assertions))]
             {
                 let resource_dir = app

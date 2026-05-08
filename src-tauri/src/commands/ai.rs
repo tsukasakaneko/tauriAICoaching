@@ -99,6 +99,15 @@ pub async fn ai_analyze(
         _ => {} // "pro": unlimited
     }
 
+    const MAX_TOTAL_INPUT: usize = 10_000;
+    let total_input_len = payload.rank.len()
+        + payload.agent.len()
+        + payload.review.len()
+        + payload.self_assessment.iter().map(|s| s.len()).sum::<usize>();
+    if total_input_len > MAX_TOTAL_INPUT {
+        return Err("入力データが大きすぎます。各フィールドを短くしてください。".to_string());
+    }
+
     let system_prompt = build_system_prompt(&payload.agent, &payload.rank);
     let user_prompt = build_user_prompt(&payload);
 
@@ -124,6 +133,8 @@ pub fn get_ai_config(app: AppHandle) -> AiConfig {
 
 #[tauri::command]
 pub fn set_ai_config(app: AppHandle, config: AiConfig) -> Result<(), String> {
+    crate::ai_provider::validate_ollama_url(&config.ollama_url)?;
+
     let final_config = if config.claude_api_key.as_deref().map(|k| k.contains("...")).unwrap_or(false) {
         let existing = load_ai_config(&app);
         AiConfig { claude_api_key: existing.claude_api_key, ..config }
@@ -154,6 +165,7 @@ pub async fn test_ollama(
     url: String,
     model: String,
 ) -> Result<String, String> {
+    crate::ai_provider::validate_ollama_url(&url)?;
     crate::ai_provider::test_ollama_connection(&http.0, &url, &model).await
 }
 

@@ -92,11 +92,15 @@ router.post("/analyze", requireAuth, async (req, res) => {
   }
 
   // Enforce input length limits to prevent oversized payloads reaching the AI API
+  const MAX_RANK_LEN = 50;
   const MAX_AGENT_LEN = 60;
   const MAX_REVIEW_LEN = 2000;
   const MAX_ASSESSMENT_ITEMS = 10;
   const MAX_ASSESSMENT_ITEM_LEN = 100;
 
+  if (typeof rank !== "string" || rank.length > MAX_RANK_LEN) {
+    return res.status(400).json({ message: `ランクは${MAX_RANK_LEN}文字以内の文字列で入力してください` });
+  }
   if (typeof agent !== "string" || agent.length > MAX_AGENT_LEN) {
     return res.status(400).json({ message: `エージェント名は${MAX_AGENT_LEN}文字以内で入力してください` });
   }
