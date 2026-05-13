@@ -30,6 +30,18 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
   : null;
 
+// P1-A: In-memory dedup set — only add event.id AFTER successful fulfillment.
+// Ephemeral (resets on restart) but handles the common case of Stripe auto-retries
+// that arrive within the same process lifetime.
+const processedEventIds = new Set();
+function markEventProcessed(eventId) {
+  if (processedEventIds.size >= 5000) {
+    const oldest = [...processedEventIds].slice(0, 1000);
+    oldest.forEach(id => processedEventIds.delete(id));
+  }
+  processedEventIds.add(eventId);
+}
+
 const PRICE_MAP = {
   starter:     process.env.STRIPE_PRICE_STARTER,
   standard:    process.env.STRIPE_PRICE_STANDARD,
@@ -150,6 +162,11 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  // P1-A: Idempotency — skip already-fulfilled events
+  if (processedEventIds.has(event.id)) {
+    return res.json({ received: true });
+  }
+
   try {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
@@ -158,6 +175,7 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
       const productLabel = session.metadata?.product_label || tier || '不明';
 
       if (!email || !tier || !TIER_CONFIG[tier]) {
+        // Permanent data error — retrying won't help; log and ack
         console.warn('[stripe webhook] missing email or tier in session:', session.id);
         return res.json({ received: true });
       }
@@ -165,16 +183,53 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
       const cfg = TIER_CONFIG[tier];
       const exp = expiryForTier(tier);
       const key = issueLicenseKey(cfg.tierCode, cfg.prefix, exp.year, exp.month);
-
       await sendLicenseEmail(email, productLabel, key);
       console.log(`[stripe webhook] issued ${tier} key for ${email}`);
-    }
-  } catch (err) {
-    console.error('[stripe webhook] processing error:', err);
-    // Return 200 so Stripe doesn't retry; log for manual follow-up
-  }
 
-  res.json({ received: true });
+    } else if (event.type === 'invoice.paid') {
+      // P1-B: Handle subscription renewals (2nd billing cycle onward)
+      const invoice = event.data.object;
+
+      // 'subscription_create' = first invoice, already handled by checkout.session.completed
+      if (invoice.billing_reason === 'subscription_create') {
+        return res.json({ received: true });
+      }
+      if (invoice.billing_reason !== 'subscription_cycle') {
+        return res.json({ received: true });
+      }
+
+      const email = invoice.customer_email;
+      if (!email || !invoice.subscription) {
+        console.warn('[stripe webhook] invoice.paid missing email or subscription:', invoice.id);
+        return res.json({ received: true });
+      }
+
+      const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+      const tier = subscription.metadata?.tier;
+      const productLabel = subscription.metadata?.product_label || tier || 'サブスクリプション更新';
+
+      if (!tier || !TIER_CONFIG[tier]) {
+        console.warn('[stripe webhook] unknown tier in subscription metadata:', subscription.id);
+        return res.json({ received: true });
+      }
+
+      const cfg = TIER_CONFIG[tier];
+      const exp = expiryForTier(tier);
+      const key = issueLicenseKey(cfg.tierCode, cfg.prefix, exp.year, exp.month);
+      await sendLicenseEmail(email, productLabel, key);
+      console.log(`[stripe webhook] renewal: issued ${tier} key for ${email}`);
+    }
+
+    // P1-A: Mark as processed only after successful fulfillment
+    markEventProcessed(event.id);
+    res.json({ received: true });
+
+  } catch (err) {
+    // P1-C: Return 500 so Stripe retries transient failures (SMTP down, etc.)
+    // event.id is NOT added to processedEventIds, allowing the retry to proceed.
+    console.error('[stripe webhook] fulfillment error — will allow Stripe retry:', err);
+    res.status(500).json({ message: 'Fulfillment failed, will retry' });
+  }
 });
 
 app.use(express.json({ limit: '1mb' }));
