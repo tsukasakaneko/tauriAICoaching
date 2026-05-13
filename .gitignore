@@ -20,3 +20,9 @@ backend/.env
 # Frontend build cache
 *.local
 .vite/
+
+# Training artifacts (model files stay outside repo except final ONNX)
+training/data/
+training/runs/
+training/*.pt
+training/*.onnx

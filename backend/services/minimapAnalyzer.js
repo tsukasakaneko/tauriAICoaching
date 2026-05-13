@@ -14,10 +14,10 @@ class MinimapAnalyzer {
     const playerDot = detections.find(d => d.class === 'player_dot');
 
     if (playerDot) {
-      const [x, y, w, h] = playerDot.bbox;
+      const [x, y] = playerDot.bbox;
       this._positions.push({
-        x: (x + w / 2) / 640,  // normalize to 0-1
-        y: (y + h / 2) / 640,
+        x: x / 640,
+        y: y / 640,
       });
     }
   }

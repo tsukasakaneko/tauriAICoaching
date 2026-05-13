@@ -43,7 +43,7 @@ async function loadModel(modelName) {
 async function preprocessImage(imageBuf, width = MODEL_INPUT_SIZE, height = MODEL_INPUT_SIZE) {
   const sharp = getSharp();
   const { data } = await sharp(imageBuf)
-    .resize(width, height)
+    .resize(width, height, { fit: 'contain', background: { r: 114, g: 114, b: 114 } })
     .removeAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
@@ -98,10 +98,24 @@ async function detectObjects(imageBuf, modelName, classes) {
   return parseDetections(output, classes, 0.45);
 }
 
+// YOLOv8 ONNX detection output is [1, 4+nc, 8400] (channel-first).
+// Transpose to row-major [8400, 4+nc] so each row is one anchor proposal.
+function transposeYolov8Output(raw, nc) {
+  const numAnchors = raw.length / (4 + nc);
+  const stride = 4 + nc;
+  const out = new Float32Array(raw.length);
+  for (let a = 0; a < numAnchors; a++) {
+    for (let f = 0; f < stride; f++) {
+      out[a * stride + f] = raw[f * numAnchors + a];
+    }
+  }
+  return out;
+}
+
 // Parse YOLOv8 detection output (raw boxes + confidence) with NMS
 function parseDetections(output, classes, threshold) {
   const key = Object.keys(output)[0];
-  const raw = output[key].data;
+  const raw = transposeYolov8Output(output[key].data, classes.length);
   const numDetections = raw.length / (4 + classes.length);
 
   const boxes = [];
@@ -140,9 +154,12 @@ function nonMaxSuppression(boxes, iouThreshold) {
   return kept;
 }
 
-function iou([x1, y1, w1, h1], [x2, y2, w2, h2]) {
-  const ix = Math.max(0, Math.min(x1 + w1, x2 + w2) - Math.max(x1, x2));
-  const iy = Math.max(0, Math.min(y1 + h1, y2 + h2) - Math.max(y1, y2));
+// YOLOv8 outputs center-xywh; convert to xyxy before computing overlap.
+function iou([cx1, cy1, w1, h1], [cx2, cy2, w2, h2]) {
+  const [x1a, y1a, x1b, y1b] = [cx1 - w1 / 2, cy1 - h1 / 2, cx1 + w1 / 2, cy1 + h1 / 2];
+  const [x2a, y2a, x2b, y2b] = [cx2 - w2 / 2, cy2 - h2 / 2, cx2 + w2 / 2, cy2 + h2 / 2];
+  const ix = Math.max(0, Math.min(x1b, x2b) - Math.max(x1a, x2a));
+  const iy = Math.max(0, Math.min(y1b, y2b) - Math.max(y1a, y2a));
   const inter = ix * iy;
   return inter / (w1 * h1 + w2 * h2 - inter);
 }

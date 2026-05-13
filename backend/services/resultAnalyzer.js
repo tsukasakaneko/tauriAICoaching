@@ -1,10 +1,7 @@
 'use strict';
 
-const { detectObjects } = require('./yoloInference');
-
-const RESULT_CLASSES = ['scoreboard_row', 'kda_cell', 'damage_cell', 'hs_cell'];
-
-// Extract match stats from a result screen frame using YOLOv8 + OCR
+// Extract match stats from a result screen using full-resolution Tesseract OCR.
+// Avoiding downscale-to-640 keeps scoreboard text at readable size (≥20 px).
 async function analyzeResultScreen(imageBuf) {
   if (process.env.SIMULATE_GAME || process.env.SIMULATE_YOLO === 'true') {
     return {
@@ -18,50 +15,58 @@ async function analyzeResultScreen(imageBuf) {
     };
   }
 
-  // Detect regions on the result screen
-  const detections = await detectObjects(imageBuf, 'valorant_result', RESULT_CLASSES);
-
-  if (detections.length === 0) {
-    return null;
-  }
-
-  // OCR the detected cell regions
   const sharp = require('sharp');
   const Tesseract = require('tesseract.js');
-  const results = {};
 
-  for (const det of detections) {
-    const [x, y, w, h] = det.bbox.map(Math.round);
-    const cropped = await sharp(imageBuf)
-      .extract({ left: x, top: y, width: Math.max(w, 1), height: Math.max(h, 1) })
-      .grayscale()
-      .normalize()
-      .toBuffer();
+  const { width: W, height: H } = await sharp(imageBuf).metadata();
 
-    const { data: { text } } = await Tesseract.recognize(cropped, 'eng');
-    const nums = text.match(/\d+/g)?.map(Number) || [];
+  // Valorant scoreboard occupies roughly the centre 70% of the screen,
+  // starting ~15% from the top. Crop to avoid HUD chrome.
+  const roiBuf = await sharp(imageBuf)
+    .extract({
+      left:   Math.floor(W * 0.15),
+      top:    Math.floor(H * 0.15),
+      width:  Math.floor(W * 0.70),
+      height: Math.floor(H * 0.75),
+    })
+    .grayscale()
+    .normalize()
+    .toBuffer();
 
-    if (det.class === 'kda_cell' && nums.length >= 3) {
-      results.kills = nums[0];
-      results.deaths = nums[1];
-      results.assists = nums[2];
-    }
-    if (det.class === 'damage_cell' && nums.length >= 1) {
-      results.damageDealt = nums[0];
-    }
-    if (det.class === 'hs_cell' && nums.length >= 1) {
-      results.headshotRate = nums[0] / 100;
-    }
-  }
+  const { data: { text } } = await Tesseract.recognize(roiBuf, 'eng', {
+    tessedit_char_whitelist: '0123456789KDAkda/.% ',
+  });
+
+  return parseScoreboardText(text);
+}
+
+// Extract K/D/A, damage and headshot rate from OCR text.
+// Valorant result screen shows a row like "8 / 5 / 3" for KDA.
+function parseScoreboardText(text) {
+  const nums = (str) => (str.match(/\d+/g) || []).map(Number);
+
+  // K / D / A pattern: three numbers separated by slashes or spaces
+  const kdaMatch = text.match(/(\d+)\s*[\/\s]\s*(\d+)\s*[\/\s]\s*(\d+)/);
+  const kills    = kdaMatch ? Number(kdaMatch[1]) : 0;
+  const deaths   = kdaMatch ? Number(kdaMatch[2]) : 0;
+  const assists  = kdaMatch ? Number(kdaMatch[3]) : 0;
+
+  // Damage: largest standalone number that isn't K/D/A-range (>200 threshold)
+  const allNums    = nums(text);
+  const damageDealt = allNums.find(n => n > 200) ?? 0;
+
+  // Headshot rate: a number followed by % (0–100)
+  const hsMatch    = text.match(/(\d{1,3})\s*%/);
+  const headshotRate = hsMatch ? Number(hsMatch[1]) / 100 : 0;
 
   return {
-    kills: results.kills || 0,
-    deaths: results.deaths || 0,
-    assists: results.assists || 0,
-    damageDealt: results.damageDealt || 0,
-    headshotRate: results.headshotRate || 0,
+    kills,
+    deaths,
+    assists,
+    damageDealt,
+    headshotRate,
     totalRounds: null,
-    wonRounds: null,
+    wonRounds:   null,
   };
 }
 

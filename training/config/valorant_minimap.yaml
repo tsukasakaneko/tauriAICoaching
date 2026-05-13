@@ -1,0 +1,8 @@
+# Dataset config for valorant_minimap detection model.
+# Class order MUST match MINIMAP_CLASSES in minimapAnalyzer.js.
+path: ../data/minimap
+train: images/train
+val:   images/val
+
+nc: 3
+names: ['minimap_region', 'player_dot', 'enemy_dot']

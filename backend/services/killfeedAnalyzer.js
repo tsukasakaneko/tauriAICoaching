@@ -1,49 +1,86 @@
 'use strict';
 
-const { detectObjects } = require('./yoloInference');
+// Valorant killfeed occupies the right ~28% × top ~30% of the screen.
+// We detect kill/death events by monitoring pixel-level change in that ROI.
+// A large enough frame-to-frame difference means a new entry appeared.
+// The skull icon (own_death) has a distinctive red tint; kill entries are white/grey.
 
-const KILLFEED_CLASSES = ['kill_entry', 'own_kill', 'own_death', 'headshot_icon', 'ability_icon'];
+const DIFF_THRESHOLD = 12;   // mean absolute pixel diff to consider ROI "changed"
+const RED_BIAS_THRESHOLD = 25; // red channel excess (R-B) indicating a death icon
 
-// Tracks accumulated stats across calls
 class KillfeedStats {
   constructor() {
     this.kills = 0;
     this.deaths = 0;
     this.headshotKills = 0;
     this.abilityKills = 0;
-    this._lastDetectedKill = false;
-    this._lastDetectedDeath = false;
+    this._prevRoiBuf = null;
+    this._prevHadChange = false;
   }
 
   async processFrame(imageBuf) {
-    const detections = await detectObjects(imageBuf, 'valorant_killfeed', KILLFEED_CLASSES);
+    if (process.env.SIMULATE_YOLO === 'true') return;
 
-    const hasOwnKill = detections.some(d => d.class === 'own_kill');
-    const hasOwnDeath = detections.some(d => d.class === 'own_death');
-    const hasHeadshot = detections.some(d => d.class === 'headshot_icon');
-    const hasAbility = detections.some(d => d.class === 'ability_icon');
+    const sharp = require('sharp');
+    const { width: W, height: H } = await sharp(imageBuf).metadata();
 
-    // Rising edge detection — only count when newly appearing
-    if (hasOwnKill && !this._lastDetectedKill) {
-      this.kills++;
-      if (hasHeadshot) this.headshotKills++;
-      if (hasAbility) this.abilityKills++;
+    // Extract killfeed ROI (top-right corner)
+    const roiBuf = await sharp(imageBuf)
+      .extract({
+        left:   Math.floor(W * 0.72),
+        top:    0,
+        width:  Math.floor(W * 0.28),
+        height: Math.floor(H * 0.30),
+      })
+      .grayscale()
+      .raw()
+      .toBuffer();
+
+    if (!this._prevRoiBuf || this._prevRoiBuf.length !== roiBuf.length) {
+      this._prevRoiBuf = roiBuf;
+      return;
     }
-    if (hasOwnDeath && !this._lastDetectedDeath) {
-      this.deaths++;
+
+    // Mean absolute difference between frames
+    let diffSum = 0;
+    for (let i = 0; i < roiBuf.length; i++) {
+      diffSum += Math.abs(roiBuf[i] - this._prevRoiBuf[i]);
+    }
+    const meanDiff = diffSum / roiBuf.length;
+
+    // Rising edge: only count when a new entry appears (not while it persists)
+    const hasChange = meanDiff > DIFF_THRESHOLD;
+    if (hasChange && !this._prevHadChange) {
+      // Sample the ROI in colour to distinguish kill vs death
+      const colorStats = await sharp(imageBuf)
+        .extract({
+          left:   Math.floor(W * 0.72),
+          top:    0,
+          width:  Math.floor(W * 0.28),
+          height: Math.floor(H * 0.30),
+        })
+        .stats();
+      const [rMean, , bMean] = colorStats.channels.map(c => c.mean);
+
+      // Skull icon (own_death) pushes red channel noticeably above blue
+      if (rMean - bMean > RED_BIAS_THRESHOLD) {
+        this.deaths++;
+      } else {
+        this.kills++;
+      }
     }
 
-    this._lastDetectedKill = hasOwnKill;
-    this._lastDetectedDeath = hasOwnDeath;
+    this._prevHadChange = hasChange;
+    this._prevRoiBuf = roiBuf;
   }
 
   toResult() {
     return {
-      kills: this.kills,
-      deaths: this.deaths,
+      kills:         this.kills,
+      deaths:        this.deaths,
       headshotKills: this.headshotKills,
-      abilityKills: this.abilityKills,
-      headshotRate: this.kills > 0 ? this.headshotKills / this.kills : 0,
+      abilityKills:  this.abilityKills,
+      headshotRate:  this.kills > 0 ? this.headshotKills / this.kills : 0,
     };
   }
 }
