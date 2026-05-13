@@ -19,8 +19,8 @@ import os
 import sys
 from pathlib import Path
 
-WORKSPACE  = os.environ.get('ROBOFLOW_WORKSPACE', '')
-PROJECT    = os.environ.get('ROBOFLOW_PROJECT', 'valorant-minimap')
+WORKSPACE  = os.environ.get('ROBOFLOW_WORKSPACE', 'ddsssers-workspace')
+PROJECT    = os.environ.get('ROBOFLOW_PROJECT', 'valorant-minimap-de8vw')
 VERSION    = int(os.environ.get('ROBOFLOW_VERSION', '1'))
 OUTPUT_DIR = Path(__file__).parent.parent / 'data' / 'minimap'
 
@@ -36,14 +36,8 @@ def main():
 
     rf = Roboflow(api_key=api_key)
 
-    if WORKSPACE:
-        project = rf.workspace(WORKSPACE).project(PROJECT)
-    else:
-        # Search public universe for a suitable dataset
-        print('No ROBOFLOW_WORKSPACE set — searching Roboflow Universe...')
-        print('Visit https://universe.roboflow.com and search "valorant minimap"')
-        print('Then set ROBOFLOW_WORKSPACE and ROBOFLOW_PROJECT and re-run.')
-        sys.exit(1)
+    print(f'Downloading {WORKSPACE}/{PROJECT} v{VERSION} ...')
+    project = rf.workspace(WORKSPACE).project(PROJECT)
 
     dataset = project.version(VERSION).download('yolov8', location=str(OUTPUT_DIR))
     print(f'\nDataset downloaded to: {OUTPUT_DIR}')
