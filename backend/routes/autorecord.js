@@ -158,6 +158,9 @@ router.get('/autorecord/status', (req, res) => {
   const user = authFromQuery(req, res);
   if (!user) return;
 
+  // C-03: Free tier cannot subscribe to recording events
+  if (user.is_paid !== 1) return res.status(403).json({ error: 'paid_only' });
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');

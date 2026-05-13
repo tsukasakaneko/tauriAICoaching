@@ -19,6 +19,32 @@ db.exec(`
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     is_paid INTEGER DEFAULT 0,
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    subscription_status TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+// Add Stripe columns to existing DBs that predate this migration
+for (const col of [
+  "ALTER TABLE users ADD COLUMN stripe_customer_id TEXT",
+  "ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT",
+  "ALTER TABLE users ADD COLUMN subscription_status TEXT",
+]) {
+  try { db.exec(col); } catch { /* column already exists */ }
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS purchases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id),
+    stripe_event_id TEXT UNIQUE NOT NULL,
+    stripe_session_id TEXT,
+    product TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    license_key TEXT,
+    customer_email TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )
 `);

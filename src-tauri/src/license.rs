@@ -13,6 +13,8 @@ pub enum LicenseTier {
     CloudMonthly { expiry_year: u8, expiry_month: u8 },
     Credit10,
     Credit30,
+    Credit80,
+    CloudYearly { expiry_year: u8, expiry_month: u8 },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -71,8 +73,36 @@ pub fn validate_key(key: &str) -> Result<LicenseInfo, String> {
             }
             LicenseTier::CloudMonthly { expiry_year, expiry_month }
         }
-        (0x03, "VCREDIT") => LicenseTier::Credit10,
-        (0x04, "VCREDIT") => LicenseTier::Credit30,
+        (0x06, "VCLOUD") => {
+            if is_expired(expiry_year, expiry_month) {
+                return Err("このキーは有効期限切れです".to_string());
+            }
+            LicenseTier::CloudYearly { expiry_year, expiry_month }
+        }
+        (0x03, "VCREDIT") => {
+            if expiry_year != 0xFF && expiry_month != 0xFF
+                && is_expired(expiry_year, expiry_month)
+            {
+                return Err("このクレジットキーは有効期限切れです".to_string());
+            }
+            LicenseTier::Credit10
+        }
+        (0x04, "VCREDIT") => {
+            if expiry_year != 0xFF && expiry_month != 0xFF
+                && is_expired(expiry_year, expiry_month)
+            {
+                return Err("このクレジットキーは有効期限切れです".to_string());
+            }
+            LicenseTier::Credit30
+        }
+        (0x05, "VCREDIT") => {
+            if expiry_year != 0xFF && expiry_month != 0xFF
+                && is_expired(expiry_year, expiry_month)
+            {
+                return Err("このクレジットキーは有効期限切れです".to_string());
+            }
+            LicenseTier::Credit80
+        }
         _ => return Err("キーの形式が正しくありません".to_string()),
     };
 
@@ -107,14 +137,14 @@ fn verify_signature(payload: &[u8], sig_bytes: &[u8; 64]) -> Result<(), String> 
     }
 }
 
-/// Returns `(expiry_year_since_2020, expiry_month)` for a CloudMonthly key, or `None`.
+/// Returns `(expiry_year_since_2020, expiry_month)` for a CloudMonthly or CloudYearly key, or `None`.
 pub fn get_cloud_expiry(raw_key: &str) -> Option<(u8, u8)> {
     let key = raw_key.trim();
     let dash_pos = key.find('-')?;
     let body = &key[dash_pos + 1..];
     let decoded = URL_SAFE_NO_PAD.decode(body).ok()?;
     if decoded.len() != 68 { return None; }
-    if decoded[0] != 0x02 { return None; } // Not CloudMonthly
+    if decoded[0] != 0x02 && decoded[0] != 0x06 { return None; } // Not a cloud subscription
     let expiry_year = decoded[1];
     let expiry_month = decoded[2];
     if expiry_year == 0xFF { return None; } // No expiry

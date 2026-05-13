@@ -6,10 +6,13 @@
 ///   cargo run --bin keygen -- generate-keypair
 ///
 ///   # Create a license key (reads LICENSE_PRIVATE_KEY from environment)
-///   LICENSE_PRIVATE_KEY=<base64url> cargo run --bin keygen -- create-key --tier pro
-///   LICENSE_PRIVATE_KEY=<base64url> cargo run --bin keygen -- create-key --tier cloud   --expiry 2026-12
+///   LICENSE_PRIVATE_KEY=<base64url> cargo run --bin keygen -- create-key --tier cloud        --expiry 2026-12
+///   LICENSE_PRIVATE_KEY=<base64url> cargo run --bin keygen -- create-key --tier cloud_yearly --expiry 2027-05
 ///   LICENSE_PRIVATE_KEY=<base64url> cargo run --bin keygen -- create-key --tier credit10
 ///   LICENSE_PRIVATE_KEY=<base64url> cargo run --bin keygen -- create-key --tier credit30
+///   LICENSE_PRIVATE_KEY=<base64url> cargo run --bin keygen -- create-key --tier credit80
+///
+/// Note: VCOACH (Pro永久) is discontinued. New "pro" keys are no longer issued.
 ///
 /// After generating a keypair, set the public key in your CI environment:
 ///   GitHub Secret: LICENSE_PUBLIC_KEY = <public key base64url printed above>
@@ -28,7 +31,7 @@ fn main() {
         _ => {
             eprintln!("Usage:");
             eprintln!("  keygen generate-keypair");
-            eprintln!("  keygen create-key --tier pro|cloud|credit10|credit30 [--expiry YYYY-MM]");
+            eprintln!("  keygen create-key --tier cloud|cloud_yearly|credit10|credit30|credit80 [--expiry YYYY-MM]");
             std::process::exit(1);
         }
     }
@@ -80,15 +83,29 @@ fn create_key(args: &[String]) {
     let signing_key = SigningKey::from_bytes(&private_key_array);
 
     let (tier_code, prefix, expiry_year, expiry_month) = match tier.as_str() {
-        "pro" => (0x01u8, "VCOACH", 0xFFu8, 0xFFu8),
         "cloud" => {
             let (year, month) = parse_expiry(&expiry);
             (0x02u8, "VCLOUD", year, month)
         }
-        "credit10" => (0x03u8, "VCREDIT", 0xFFu8, 0xFFu8),
-        "credit30" => (0x04u8, "VCREDIT", 0xFFu8, 0xFFu8),
+        "cloud_yearly" => {
+            let (year, month) = parse_expiry(&expiry);
+            (0x06u8, "VCLOUD", year, month)
+        }
+        "credit10" => {
+            let (year, month) = if expiry.is_empty() { one_year_from_now() } else { parse_expiry(&expiry) };
+            (0x03u8, "VCREDIT", year, month)
+        }
+        "credit30" => {
+            let (year, month) = if expiry.is_empty() { one_year_from_now() } else { parse_expiry(&expiry) };
+            (0x04u8, "VCREDIT", year, month)
+        }
+        "credit80" => {
+            let (year, month) = if expiry.is_empty() { one_year_from_now() } else { parse_expiry(&expiry) };
+            (0x05u8, "VCREDIT", year, month)
+        }
         _ => {
-            eprintln!("Unknown tier '{}'. Use: pro, cloud, credit10, credit30", tier);
+            eprintln!("Unknown tier '{}'. Use: cloud, cloud_yearly, credit10, credit30, credit80", tier);
+            eprintln!("Note: VCOACH (pro) is discontinued and no longer issuable.");
             std::process::exit(1);
         }
     };
@@ -102,6 +119,14 @@ fn create_key(args: &[String]) {
     body.extend_from_slice(&signature.to_bytes());
 
     println!("{}-{}", prefix, URL_SAFE_NO_PAD.encode(&body));
+}
+
+fn one_year_from_now() -> (u8, u8) {
+    use chrono::{Datelike, Local, Months};
+    let next_year = Local::now().checked_add_months(Months::new(12)).expect("date overflow");
+    let year_offset = (next_year.year() - 2020) as u8;
+    let month = next_year.month() as u8;
+    (year_offset, month)
 }
 
 fn parse_expiry(expiry: &str) -> (u8, u8) {
