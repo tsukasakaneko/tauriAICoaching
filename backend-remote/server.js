@@ -6,6 +6,8 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const Anthropic = require('@anthropic-ai/sdk');
 const cors = require('cors');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error('FATAL: JWT_SECRET must be set and at least 32 characters.');
@@ -23,12 +25,197 @@ if (!process.env.ANTHROPIC_API_KEY) {
 const app = express();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// Allow Tauri webview origins
+// ── Stripe ────────────────────────────────────────────────────────────────────
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? require('stripe')(process.env.STRIPE_SECRET_KEY)
+  : null;
+
+const PRICE_MAP = {
+  starter:     process.env.STRIPE_PRICE_STARTER,
+  standard:    process.env.STRIPE_PRICE_STANDARD,
+  pro_pack:    process.env.STRIPE_PRICE_PRO_PACK,
+  monthly:     process.env.STRIPE_PRICE_MONTHLY,
+  yearly:      process.env.STRIPE_PRICE_YEARLY,
+};
+
+// Maps Stripe product metadata.tier → keygen tier + key prefix
+const TIER_CONFIG = {
+  credit10:     { tierCode: 0x03, prefix: 'VCREDIT', credits: 10 },
+  credit30:     { tierCode: 0x04, prefix: 'VCREDIT', credits: 30 },
+  credit80:     { tierCode: 0x05, prefix: 'VCREDIT', credits: 80 },
+  cloud:        { tierCode: 0x02, prefix: 'VCLOUD',  credits: 50 },
+  cloud_yearly: { tierCode: 0x06, prefix: 'VCLOUD',  credits: 600 },
+};
+
+// PKCS8 DER prefix for a raw 32-byte Ed25519 private key seed
+const ED25519_PKCS8_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex');
+
+function issueLicenseKey(tierCode, prefix, expiryYear, expiryMonth) {
+  const privateKeyB64 = process.env.LICENSE_PRIVATE_KEY;
+  if (!privateKeyB64) throw new Error('LICENSE_PRIVATE_KEY is not set');
+
+  const seed = Buffer.from(privateKeyB64, 'base64url');
+  if (seed.length !== 32) throw new Error('LICENSE_PRIVATE_KEY must be 32 bytes (43 base64url chars)');
+
+  const pkcs8Der = Buffer.concat([ED25519_PKCS8_PREFIX, seed]);
+  const privateKey = crypto.createPrivateKey({ key: pkcs8Der, format: 'der', type: 'pkcs8' });
+
+  const nonce = crypto.randomInt(256);
+  const payload = Buffer.from([tierCode, expiryYear, expiryMonth, nonce]);
+  const signature = crypto.sign(null, payload, privateKey);
+
+  const body = Buffer.concat([payload, signature]);
+  return `${prefix}-${body.toString('base64url')}`;
+}
+
+function expiryForTier(tier) {
+  const now = new Date();
+  if (tier === 'cloud') {
+    // Monthly: expire end of next month
+    const d = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return { year: d.getFullYear() - 2020, month: d.getMonth() + 1 };
+  }
+  if (tier === 'cloud_yearly') {
+    const d = new Date(now.getFullYear() + 1, now.getMonth(), 1);
+    return { year: d.getFullYear() - 2020, month: d.getMonth() + 1 };
+  }
+  // Credits: 1 year from now
+  const d = new Date(now.getFullYear() + 1, now.getMonth(), 1);
+  return { year: d.getFullYear() - 2020, month: d.getMonth() + 1 };
+}
+
+async function sendLicenseEmail(to, productLabel, licenseKey) {
+  if (!process.env.SMTP_HOST && !process.env.SENDGRID_API_KEY) {
+    console.log(`[email] Would send key to ${to}: ${licenseKey}`);
+    return;
+  }
+
+  let transporter;
+  if (process.env.SENDGRID_API_KEY) {
+    transporter = nodemailer.createTransport({
+      service: 'SendGrid',
+      auth: { user: 'apikey', pass: process.env.SENDGRID_API_KEY },
+    });
+  } else {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: false,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+  }
+
+  const from = process.env.EMAIL_FROM || 'noreply@valorant-coaching.app';
+  await transporter.sendMail({
+    from,
+    to,
+    subject: '【Valorant AIコーチング】ライセンスキーのご案内',
+    text: [
+      'この度はValorant AIコーチングをご購入いただきありがとうございます。',
+      '',
+      `■ ご購入プラン: ${productLabel}`,
+      `■ ライセンスキー: ${licenseKey}`,
+      '',
+      '【アクティベート方法】',
+      '1. Valorant AIコーチングアプリを起動してください。',
+      '2. 設定画面 → ライセンス → 「アクティベーションキー」欄にキーを入力してください。',
+      '3. 「有効化」ボタンを押すと、クレジットが付与されます。',
+      '',
+      'ご不明な点がございましたら、お気軽にお問い合わせください。',
+    ].join('\n'),
+  });
+}
+
+// ── Allow Tauri webview origins
 app.use(cors({
   origin: ['tauri://localhost', 'https://tauri.localhost', 'http://localhost:1420'],
   credentials: true,
 }));
+
+// Stripe webhook must receive raw body — mount BEFORE express.json()
+app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
+    return res.status(503).json({ message: 'Stripe not configured' });
+  }
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      req.headers['stripe-signature'],
+      process.env.STRIPE_WEBHOOK_SECRET,
+    );
+  } catch (err) {
+    console.error('[stripe webhook] signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const email = session.customer_details?.email || session.customer_email;
+      const tier = session.metadata?.tier;
+      const productLabel = session.metadata?.product_label || tier || '不明';
+
+      if (!email || !tier || !TIER_CONFIG[tier]) {
+        console.warn('[stripe webhook] missing email or tier in session:', session.id);
+        return res.json({ received: true });
+      }
+
+      const cfg = TIER_CONFIG[tier];
+      const exp = expiryForTier(tier);
+      const key = issueLicenseKey(cfg.tierCode, cfg.prefix, exp.year, exp.month);
+
+      await sendLicenseEmail(email, productLabel, key);
+      console.log(`[stripe webhook] issued ${tier} key for ${email}`);
+    }
+  } catch (err) {
+    console.error('[stripe webhook] processing error:', err);
+    // Return 200 so Stripe doesn't retry; log for manual follow-up
+  }
+
+  res.json({ received: true });
+});
+
 app.use(express.json({ limit: '1mb' }));
+
+// ── Create Stripe Checkout session ───────────────────────────────────────────
+app.post('/create-checkout-session', async (req, res) => {
+  if (!stripe) return res.status(503).json({ message: 'Stripe not configured' });
+
+  const { product } = req.body;
+  if (typeof product !== 'string' || !PRICE_MAP[product]) {
+    return res.status(400).json({ message: '不正なプロダクトです' });
+  }
+
+  const isSubscription = product === 'monthly' || product === 'yearly';
+  const tierMap = {
+    starter: 'credit10', standard: 'credit30', pro_pack: 'credit80',
+    monthly: 'cloud', yearly: 'cloud_yearly',
+  };
+  const productLabels = {
+    starter: 'スターター (10クレジット)', standard: 'スタンダード (30クレジット)',
+    pro_pack: 'プロパック (80クレジット)', monthly: '月額プラン', yearly: '年額プラン',
+  };
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      line_items: [{ price: PRICE_MAP[product], quantity: 1 }],
+      mode: isSubscription ? 'subscription' : 'payment',
+      success_url: `${process.env.APP_SUCCESS_URL || 'https://valorant-coaching.app/purchase-complete'}`,
+      cancel_url: `${process.env.APP_CANCEL_URL || 'https://valorant-coaching.app/purchase-cancel'}`,
+      customer_creation: isSubscription ? undefined : 'always',
+      metadata: { tier: tierMap[product], product_label: productLabels[product] },
+      subscription_data: isSubscription
+        ? { metadata: { tier: tierMap[product], product_label: productLabels[product] } }
+        : undefined,
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('[checkout] session creation error:', err);
+    res.status(500).json({ message: 'チェックアウトセッションの作成に失敗しました' });
+  }
+});
 
 // ── Rate limiting (in-memory, resets on restart) ──────────────────────────────
 // Per-user daily limit prevents runaway usage on the free Anthropic key.

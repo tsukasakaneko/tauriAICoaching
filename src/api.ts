@@ -125,6 +125,15 @@ export const tauriApi = {
 
   getLicenseStatus: (): Promise<LicenseStatus> => invoke<LicenseStatus>("get_license_status"),
 
+  openCheckout: async (product: string): Promise<void> => {
+    const { url } = await request<{ url: string }>(
+      "/create-checkout-session",
+      { method: "POST", body: JSON.stringify({ product }) },
+      REMOTE_API_URL,
+    );
+    await invoke<void>("open_external_url", { url });
+  },
+
   testClaudeKey: (apiKey: string, model: string): Promise<string> =>
     invoke<string>("test_claude_key", { apiKey, model }),
 

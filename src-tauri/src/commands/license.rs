@@ -9,8 +9,19 @@ const KEY_LICENSE_KEY: &str = "license_key";
 const KEY_CLOUD_CREDITS: &str = "cloud_credits";
 const KEY_USED_CREDIT_NONCES: &str = "used_credit_nonces";
 const KEY_FIRST_PAYMENT_DONE: &str = "first_payment_done";
-const CLOUD_MONTHLY_CREDITS: i64 = 30;
+const CLOUD_MONTHLY_CREDITS: i64 = 50;
+const CLOUD_YEARLY_CREDITS: i64 = 600; // 50/月 × 12ヶ月を一括付与
+const CREDIT80_CREDITS: i64 = 80;
 const FIRST_PAYMENT_BONUS: i64 = 10;
+
+/// Normalizes the key prefix to uppercase while preserving the base64url body.
+fn normalize_key_prefix(key: &str) -> String {
+    if let Some(pos) = key.find('-') {
+        format!("{}{}", key[..pos].to_uppercase(), &key[pos..])
+    } else {
+        key.to_uppercase()
+    }
+}
 
 #[derive(serde::Serialize)]
 pub struct LicenseStatus {
@@ -58,16 +69,17 @@ pub fn activate_license(app: AppHandle, key: String) -> Result<ActivationResult,
             }
         }
         LicenseTier::CloudMonthly { .. } => {
-            // Prevent re-activating the identical key to reset credits
+            // Prevent re-activating the identical key to reset credits (C-01: compare normalized key)
             let current_key = store.get(KEY_LICENSE_KEY)
                 .and_then(|v| v.as_str().map(|s| s.to_string()));
-            if current_key.as_deref().map(|k| k.eq_ignore_ascii_case(&info.raw_key)).unwrap_or(false) {
+            let normalized = normalize_key_prefix(&info.raw_key);
+            if current_key.as_deref().map(|k| k.eq_ignore_ascii_case(&normalized)).unwrap_or(false) {
                 return Err("このVCLOUDキーは既にアクティベート済みです。翌月分のキーを使用してください。".to_string());
             }
 
             let bonus = if is_first_payment { FIRST_PAYMENT_BONUS } else { 0 };
             store.set(KEY_LICENSE_TIER, serde_json::json!("cloud"));
-            store.set(KEY_LICENSE_KEY, serde_json::json!(&info.raw_key));
+            store.set(KEY_LICENSE_KEY, serde_json::json!(normalized));
             store.set(KEY_CLOUD_CREDITS, serde_json::json!(CLOUD_MONTHLY_CREDITS + bonus));
 
             if is_first_payment {
@@ -75,7 +87,25 @@ pub fn activate_license(app: AppHandle, key: String) -> Result<ActivationResult,
                 first_payment_bonus = bonus;
             }
         }
-        LicenseTier::Credit10 | LicenseTier::Credit30 => {
+        LicenseTier::CloudYearly { .. } => {
+            let current_key = store.get(KEY_LICENSE_KEY)
+                .and_then(|v| v.as_str().map(|s| s.to_string()));
+            let normalized = normalize_key_prefix(&info.raw_key);
+            if current_key.as_deref().map(|k| k.eq_ignore_ascii_case(&normalized)).unwrap_or(false) {
+                return Err("このVCLOUDキーは既にアクティベート済みです。".to_string());
+            }
+
+            let bonus = if is_first_payment { FIRST_PAYMENT_BONUS } else { 0 };
+            store.set(KEY_LICENSE_TIER, serde_json::json!("cloud"));
+            store.set(KEY_LICENSE_KEY, serde_json::json!(normalized));
+            store.set(KEY_CLOUD_CREDITS, serde_json::json!(CLOUD_YEARLY_CREDITS + bonus));
+
+            if is_first_payment {
+                store.set(KEY_FIRST_PAYMENT_DONE, serde_json::json!(true));
+                first_payment_bonus = bonus;
+            }
+        }
+        LicenseTier::Credit10 | LicenseTier::Credit30 | LicenseTier::Credit80 => {
             let nonce = info.nonce;
             let used_nonces: Vec<u8> = store.get(KEY_USED_CREDIT_NONCES)
                 .and_then(|v| serde_json::from_value(v).ok())
@@ -85,7 +115,12 @@ pub fn activate_license(app: AppHandle, key: String) -> Result<ActivationResult,
                 return Err("このクレジットキーはすでに使用済みです".to_string());
             }
 
-            let add = if info.tier == LicenseTier::Credit10 { 10i64 } else { 30i64 };
+            let add = match &info.tier {
+                LicenseTier::Credit10 => 10i64,
+                LicenseTier::Credit30 => 30i64,
+                LicenseTier::Credit80 => CREDIT80_CREDITS,
+                _ => unreachable!(),
+            };
             let current: i64 = store.get(KEY_CLOUD_CREDITS)
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0);
@@ -138,6 +173,9 @@ fn build_license_status(store: &tauri_plugin_store::Store<tauri::Wry>) -> Licens
     } else {
         None
     };
+
+    // Also expose 1-year credit expiry (VCREDIT with expiry set)
+    // For now cloud_expires_at only covers subscription keys; credits are consumed before expiry
 
     LicenseStatus { tier, cloud_credits, has_key, cloud_expires_at }
 }

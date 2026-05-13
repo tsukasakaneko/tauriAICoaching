@@ -15,3 +15,23 @@ services:
         value: claude-sonnet-4-6
       - key: NODE_ENV
         value: production
+      - key: STRIPE_SECRET_KEY
+        sync: false          # Stripe ダッシュボードで取得した sk_live_xxx を設定
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false          # Stripe Webhook 署名シークレット whsec_xxx
+      - key: STRIPE_PRICE_STARTER
+        sync: false          # price_xxx (300円 one-time / metadata.tier=credit10)
+      - key: STRIPE_PRICE_STANDARD
+        sync: false          # price_xxx (800円 one-time / metadata.tier=credit30)
+      - key: STRIPE_PRICE_PRO_PACK
+        sync: false          # price_xxx (1,980円 one-time / metadata.tier=credit80)
+      - key: STRIPE_PRICE_MONTHLY
+        sync: false          # price_xxx (980円/月 recurring / metadata.tier=cloud)
+      - key: STRIPE_PRICE_YEARLY
+        sync: false          # price_xxx (8,800円/年 recurring / metadata.tier=cloud_yearly)
+      - key: LICENSE_PRIVATE_KEY
+        sync: false          # Ed25519 秘密鍵 (base64url, 43文字)
+      - key: SENDGRID_API_KEY
+        sync: false          # SendGrid API キー (省略時はコンソールログのみ)
+      - key: EMAIL_FROM
+        sync: false          # 送信元メールアドレス

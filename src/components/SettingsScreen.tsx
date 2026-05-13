@@ -220,7 +220,7 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
                 type="text"
                 value={licenseKey}
                 onChange={(e) => setLicenseKey(e.target.value)}
-                placeholder="VCOACH-XXXXXXXX-XXXXXXXX"
+                placeholder="VCLOUD-XXXXXXXX / VCREDIT-XXXXXXXX"
                 className="key-input"
               />
               <button
@@ -232,7 +232,7 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
               </button>
             </div>
             <p className="hint-text">
-              VCOACH (Pro) / VCLOUD (Cloud AI月次) / VCREDIT (追加クレジット)
+              VCLOUD（月額/年額サブスク） / VCREDIT（クレジットパック）
             </p>
           </div>
         </section>
