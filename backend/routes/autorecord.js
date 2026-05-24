@@ -7,6 +7,7 @@ const db = require('../db');
 const screenMonitor = require('../services/screenMonitor');
 const screenRecorder = require('../services/screenRecorder');
 const { analyzeVideo } = require('../services/videoAnalyzer');
+const eventLog = require('../services/eventLog');
 
 const router = express.Router();
 
@@ -114,7 +115,7 @@ screenMonitor.on('resultScreenDetected', async () => {
   }
 
   try {
-    const videoAnalysis = await analyzeVideo(videoPath, broadcastProgress);
+    const { result: videoAnalysis, events, meta } = await analyzeVideo(videoPath, broadcastProgress);
 
     for (const userId of activeUsers) {
       const session = activeSessions.get(userId);
@@ -122,6 +123,12 @@ screenMonitor.on('resultScreenDetected', async () => {
       db.prepare(
         `UPDATE match_sessions SET video_analysis_json = ?, status = 'done' WHERE id = ?`
       ).run(JSON.stringify(videoAnalysis), session.sessionId);
+      // Persist the per-frame timeline + map for this session (one analysis → many sessions)
+      try {
+        eventLog.persist(session.sessionId, events, meta);
+      } catch (logErr) {
+        console.warn('[autorecord] failed to persist match events:', logErr.message);
+      }
       broadcast(userId, 'form_ready', { state: 'done', videoAnalysis, timestamp: new Date().toISOString() });
       activeSessions.delete(userId);
     }
