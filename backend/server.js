@@ -21,6 +21,15 @@ if (process.env.JWT_SECRET === 'your-super-secret-jwt-key-change-this-in-product
 const authRoutes = require("./routes/auth");
 const { router: coachingRouter } = require("./routes/coaching");
 const { router: autoRecordRouter } = require("./routes/autorecord");
+const { sweepOrphanFrames } = require("./services/videoAnalyzer");
+
+// Reclaim disk from frame-extraction temp dirs left by crashed runs.
+try {
+  const removed = sweepOrphanFrames();
+  if (removed > 0) console.log(`[startup] swept ${removed} orphan frame dir(s)`);
+} catch (err) {
+  console.warn("[startup] orphan frame sweep failed:", err.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
