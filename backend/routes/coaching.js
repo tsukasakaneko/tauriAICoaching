@@ -10,6 +10,17 @@ const router = express.Router();
 // Singleton Anthropic client — created once, reused for every request
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Strands Agent — loaded lazily from ESM module; falls back to SDK path if unavailable
+let _strandsAgent = null;
+if (process.env.DISABLE_STRANDS !== 'true') {
+  import('../services/strands-agent.mjs')
+    .then(({ createStrandsAgent }) => {
+      _strandsAgent = createStrandsAgent(process.env.ANTHROPIC_API_KEY);
+      console.log('[strands] エージェント初期化完了');
+    })
+    .catch((err) => console.warn('[strands] 初期化失敗、SDK フォールバックを使用:', err.message));
+}
+
 // Per-user daily rate limit — persisted in the daily_usage table so restarts don't reset counts.
 // Free users: 5/day  Paid users: 20/day
 const DAILY_LIMIT_FREE = 5;
@@ -188,6 +199,30 @@ router.post("/analyze", requireAuth, async (req, res) => {
 
   userPrompt += "\n上記の情報を基に、Valorantのコーチングレポートを生成してください。必ず有効なJSONのみを返してください。";
 
+  // Strands Agent 経由（初期化済みの場合）
+  if (_strandsAgent) {
+    try {
+      const userMessage = [
+        'プレイヤー情報:',
+        `- ランク: ${rank}`,
+        `- エージェント: ${agent}`,
+        `- 自己評価の課題: ${assessmentText}`,
+        `- プレイ振り返り: ${review || '特になし'}`,
+        videoAnalysis && typeof videoAnalysis === 'object'
+          ? `- 動画解析データあり: format_video_stats ツールに以下の JSON を渡してください: ${JSON.stringify(videoAnalysis)}`
+          : '',
+      ].filter(Boolean).join('\n');
+
+      const result = await _strandsAgent.invoke(userMessage);
+      if (result.structuredOutput) {
+        return res.json(result.structuredOutput);
+      }
+    } catch (strandsErr) {
+      console.warn('[strands] エラー、SDK フォールバックへ:', strandsErr.message);
+    }
+  }
+
+  // 既存の Anthropic SDK 呼び出し（フォールバック）
   try {
     const response = await anthropic.messages.create({
       model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
