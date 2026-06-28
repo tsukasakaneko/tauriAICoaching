@@ -69,6 +69,7 @@ pub fn run() {
                     .command("node")
                     .args([backend_js.to_string_lossy().as_ref()])
                     .env("FFMPEG_PATH", ffmpeg_path.to_string_lossy().as_ref())
+                    .env("RESOURCE_DIR", resource_dir.to_string_lossy().as_ref())
                     .spawn()
                     .expect("failed to spawn backend server — is Node.js installed?");
 

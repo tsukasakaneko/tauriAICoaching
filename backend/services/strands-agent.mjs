@@ -16,14 +16,17 @@ const tomlPath = process.env.RESOURCE_DIR
 const knowledge = parseToml(readFileSync(tomlPath, 'utf8'));
 
 const RANK_MAP = {
-  'アイアン': 'Iron',       'iron': 'Iron',
-  'ブロンズ': 'Bronze',     'bronze': 'Bronze',
-  'シルバー': 'Silver',     'silver': 'Silver',
-  'ゴールド': 'Gold',       'gold': 'Gold',
-  'プラチナ': 'Platinum',   'platinum': 'Platinum',
-  'ダイアモンド': 'Diamond', 'diamond': 'Diamond',
+  'アイアン': 'Iron',        'iron': 'Iron',
+  'ブロンズ': 'Bronze',      'bronze': 'Bronze',
+  'シルバー': 'Silver',      'silver': 'Silver',
+  'ゴールド': 'Gold',        'gold': 'Gold',
+  'プラチナ': 'Platinum',    'platinum': 'Platinum',
+  'ダイヤモンド': 'Diamond', // UI が送る表記（FormScreen.tsx）
+  'ダイヤ': 'Diamond',       // 前方一致の安全ネット
+  'ダイアモンド': 'Diamond', // 旧表記（互換性）
+  'diamond': 'Diamond',
   'アセンダント': 'Ascendant', 'ascendant': 'Ascendant',
-  'イモータル': 'Immortal', 'immortal': 'Immortal',
+  'イモータル': 'Immortal',  'immortal': 'Immortal',
   'レディアント': 'Radiant', 'radiant': 'Radiant',
 };
 

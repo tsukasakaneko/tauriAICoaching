@@ -10,13 +10,14 @@ const router = express.Router();
 // Singleton Anthropic client — created once, reused for every request
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// Strands Agent — loaded lazily from ESM module; falls back to SDK path if unavailable
-let _strandsAgent = null;
+// Strands Agent factory — loaded lazily from ESM module; falls back to SDK path if unavailable.
+// A fresh Agent is created per request to prevent conversation history leaking between users.
+let _createAgent = null;
 if (process.env.DISABLE_STRANDS !== 'true') {
   import('../services/strands-agent.mjs')
     .then(({ createStrandsAgent }) => {
-      _strandsAgent = createStrandsAgent(process.env.ANTHROPIC_API_KEY);
-      console.log('[strands] エージェント初期化完了');
+      _createAgent = () => createStrandsAgent(process.env.ANTHROPIC_API_KEY);
+      console.log('[strands] エージェントファクトリ準備完了');
     })
     .catch((err) => console.warn('[strands] 初期化失敗、SDK フォールバックを使用:', err.message));
 }
@@ -199,8 +200,8 @@ router.post("/analyze", requireAuth, async (req, res) => {
 
   userPrompt += "\n上記の情報を基に、Valorantのコーチングレポートを生成してください。必ず有効なJSONのみを返してください。";
 
-  // Strands Agent 経由（初期化済みの場合）
-  if (_strandsAgent) {
+  // Strands Agent 経由（ファクトリ準備済みの場合）— リクエストごとに新規 Agent を生成
+  if (_createAgent) {
     try {
       const userMessage = [
         'プレイヤー情報:',
@@ -213,7 +214,7 @@ router.post("/analyze", requireAuth, async (req, res) => {
           : '',
       ].filter(Boolean).join('\n');
 
-      const result = await _strandsAgent.invoke(userMessage);
+      const result = await _createAgent().invoke(userMessage);
       if (result.structuredOutput) {
         return res.json(result.structuredOutput);
       }
