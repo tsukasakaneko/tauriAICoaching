@@ -9,7 +9,9 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.86",
     "@anthropic-ai/sdk": "^0.92.0",
+    "@strands-agents/sdk": "^1.6.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.9.0",
     "cors": "^2.8.6",
@@ -19,6 +21,7 @@
     "onnxruntime-node": "^1.20.1",
     "screenshot-desktop": "^1.15.0",
     "sharp": "^0.34.2",
+    "smol-toml": "^1.7.0",
     "tesseract.js": "^5.1.1"
   },
   "devDependencies": {
