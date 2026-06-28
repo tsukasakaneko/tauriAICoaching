@@ -3,7 +3,7 @@ import type { VideoAnalysisResult } from "../types";
 import { useAutoRecord } from "../hooks/useAutoRecord";
 
 interface Props {
-  onAnalysisDone: (analysis: VideoAnalysisResult) => void;
+  onAnalysisDone: (analysis: VideoAnalysisResult, sessionId: number | null) => void;
   onBack: () => void;
 }
 
@@ -49,9 +49,9 @@ export default function AutoRecordScreen({ onAnalysisDone, onBack }: Props) {
   // Navigate when done
   useEffect(() => {
     if (status.state === "done" && status.videoAnalysis) {
-      onAnalysisDone(status.videoAnalysis);
+      onAnalysisDone(status.videoAnalysis, status.sessionId ?? null);
     }
-  }, [status.state, status.videoAnalysis, onAnalysisDone]);
+  }, [status.state, status.videoAnalysis, status.sessionId, onAnalysisDone]);
 
   const { label, step } = STATE_LABELS[status.state] ?? { label: "不明", step: 0 };
   const steps = ["待機", "キュー", "エージェント選択", "試合中", "解析中", "完了"];

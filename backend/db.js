@@ -79,4 +79,30 @@ db.exec(`
   ON match_sessions(user_id, status)
 `);
 
+// Phase 1 migrations: per-frame event log + match metadata
+db.exec(`
+  CREATE TABLE IF NOT EXISTS match_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  INTEGER NOT NULL REFERENCES match_sessions(id) ON DELETE CASCADE,
+    frame_idx   INTEGER NOT NULL,
+    t_ms        INTEGER NOT NULL,
+    event_type  TEXT    NOT NULL,
+    payload_json TEXT
+  )
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_match_events_session_t
+  ON match_events(session_id, t_ms)
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS match_meta (
+    session_id      INTEGER PRIMARY KEY REFERENCES match_sessions(id) ON DELETE CASCADE,
+    map_name        TEXT,
+    agent           TEXT,
+    ally_side_initial TEXT
+  )
+`);
+
 module.exports = db;

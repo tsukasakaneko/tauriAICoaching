@@ -1,4 +1,4 @@
-export type Screen = "login" | "form" | "report" | "autorecord" | "settings";
+export type Screen = "login" | "form" | "report" | "autorecord" | "settings" | "replay";
 
 export interface User {
   id: number;
@@ -109,5 +109,36 @@ export interface ActivationResult {
 export interface UsageStatus {
   tier: string;
   cloudCredits: number;
+}
+
+// ─── Replay / event log types ─────────────────────────────────────────────────
+
+export type MapName =
+  | "bind"
+  | "ascent"
+  | "haven"
+  | "split"
+  | "lotus"
+  | "sunset"
+  | "icebox"
+  | "abyss";
+
+export interface MatchEvent {
+  id: number;
+  frame_idx: number;
+  t_ms: number;
+  event_type: "position" | "kill" | "death" | string;
+  payload_json: string | null;
+}
+
+export interface MatchMeta {
+  map_name: MapName | null;
+  agent: string | null;
+  ally_side_initial: string | null;
+}
+
+export interface ReplayData {
+  events: MatchEvent[];
+  meta: MatchMeta | null;
 }
 

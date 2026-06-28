@@ -122,7 +122,7 @@ screenMonitor.on('resultScreenDetected', async () => {
       db.prepare(
         `UPDATE match_sessions SET video_analysis_json = ?, status = 'done' WHERE id = ?`
       ).run(JSON.stringify(videoAnalysis), session.sessionId);
-      broadcast(userId, 'form_ready', { state: 'done', videoAnalysis, timestamp: new Date().toISOString() });
+      broadcast(userId, 'form_ready', { state: 'done', videoAnalysis, sessionId: session.sessionId, timestamp: new Date().toISOString() });
       activeSessions.delete(userId);
     }
   } catch (err) {
@@ -231,6 +231,28 @@ router.get('/autorecord/state', requireAuth, (req, res) => {
     state: screenMonitor.state,
     isRecording: screenRecorder.isRecording,
   });
+});
+
+// Events for a completed session (Phase 2 replay)
+router.get('/sessions/:id/events', requireAuth, (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  if (isNaN(sessionId)) return res.status(400).json({ message: '無効なセッション ID です' });
+
+  const session = db.prepare(
+    'SELECT user_id FROM match_sessions WHERE id = ?'
+  ).get(sessionId);
+  if (!session) return res.status(404).json({ message: 'セッションが見つかりません' });
+  if (session.user_id !== req.user.id) return res.status(403).json({ message: 'アクセス権がありません' });
+
+  const events = db.prepare(
+    'SELECT id, frame_idx, t_ms, event_type, payload_json FROM match_events WHERE session_id = ? ORDER BY t_ms ASC'
+  ).all(sessionId);
+
+  const meta = db.prepare(
+    'SELECT map_name, agent, ally_side_initial FROM match_meta WHERE session_id = ?'
+  ).get(sessionId) ?? null;
+
+  res.json({ events, meta });
 });
 
 // Latest analysis for this user
