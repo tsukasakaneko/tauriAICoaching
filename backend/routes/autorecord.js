@@ -240,8 +240,12 @@ router.get('/autorecord/state', requireAuth, (req, res) => {
   });
 });
 
-// Events for a completed session (Phase 2 replay)
+// Events for a completed session (Phase 2 replay) — paid feature
 router.get('/sessions/:id/events', requireAuth, (req, res) => {
+  if (req.user.is_paid !== 1) {
+    return res.status(403).json({ message: 'この機能はライセンスキーが必要です。' });
+  }
+
   const sessionId = parseInt(req.params.id, 10);
   if (isNaN(sessionId)) return res.status(400).json({ message: '無効なセッション ID です' });
 

@@ -123,11 +123,13 @@ export type MapName =
   | "icebox"
   | "abyss";
 
+export type MatchEventType = "position" | "kill" | "death" | (string & {});
+
 export interface MatchEvent {
   id: number;
   frame_idx: number;
   t_ms: number;
-  event_type: "position" | "kill" | "death" | string;
+  event_type: MatchEventType;
   payload_json: string | null;
 }
 
