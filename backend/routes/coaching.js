@@ -4,6 +4,8 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const Anthropic = require("@anthropic-ai/sdk");
 const db = require("../db");
+const { decrypt, encrypt, isEncryptionKeyConfigured } = require('../services/crypto');
+const { refreshToken: riotRefreshToken } = require('../services/riotAuth');
 
 const router = express.Router();
 
@@ -13,13 +15,52 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 // Strands Agent factory — loaded lazily from ESM module; falls back to SDK path if unavailable.
 // A fresh Agent is created per request to prevent conversation history leaking between users.
 let _createAgent = null;
+let _setRiotContext = null;
+let _clearRiotContext = null;
 if (process.env.DISABLE_STRANDS !== 'true') {
   import('../services/strands-agent.mjs')
-    .then(({ createStrandsAgent }) => {
+    .then(({ createStrandsAgent, setRiotContext, clearRiotContext }) => {
       _createAgent = () => createStrandsAgent(process.env.ANTHROPIC_API_KEY);
+      _setRiotContext = setRiotContext;
+      _clearRiotContext = clearRiotContext;
       console.log('[strands] エージェントファクトリ準備完了');
     })
     .catch((err) => console.warn('[strands] 初期化失敗、SDK フォールバックを使用:', err.message));
+}
+
+// Refresh Riot access token if expired, returns plaintext token or null
+async function ensureFreshRiotToken(user) {
+  if (!user.riot_access_token || !user.riot_token_expires_at) return null;
+  if (!isEncryptionKeyConfigured()) return null;
+
+  const now = Math.floor(Date.now() / 1000);
+  if (user.riot_token_expires_at - 60 > now) {
+    try { return decrypt(user.riot_access_token); } catch { return null; }
+  }
+
+  // Token expired — try refresh
+  if (!user.riot_refresh_token) return null;
+  try {
+    const plainRefresh = decrypt(user.riot_refresh_token);
+    const tokens = await riotRefreshToken(plainRefresh);
+    const newExpiry = Math.floor(Date.now() / 1000) + (tokens.expires_in ?? 3600);
+    db.prepare(`
+      UPDATE users SET
+        riot_access_token = ?,
+        riot_refresh_token = ?,
+        riot_token_expires_at = ?
+      WHERE id = ?
+    `).run(
+      encrypt(tokens.access_token),
+      tokens.refresh_token ? encrypt(tokens.refresh_token) : user.riot_refresh_token,
+      newExpiry,
+      user.id
+    );
+    return tokens.access_token;
+  } catch (err) {
+    console.warn('[coaching] Riot token refresh failed:', err.message);
+    return null;
+  }
 }
 
 // Per-user daily rate limit — persisted in the daily_usage table so restarts don't reset counts.
@@ -202,6 +243,16 @@ router.post("/analyze", requireAuth, async (req, res) => {
 
   // Strands Agent 経由（ファクトリ準備済みの場合）— リクエストごとに新規 Agent を生成
   if (_createAgent) {
+    // Resolve Riot access token for paid users who have linked their account
+    let riotPuuid = null;
+    if (req.user.is_paid === 1 && req.user.riot_puuid) {
+      const accessToken = await ensureFreshRiotToken(req.user);
+      if (accessToken) {
+        riotPuuid = req.user.riot_puuid;
+        if (_setRiotContext) _setRiotContext(riotPuuid, accessToken);
+      }
+    }
+
     try {
       const userMessage = [
         'プレイヤー情報:',
@@ -212,6 +263,9 @@ router.post("/analyze", requireAuth, async (req, res) => {
         videoAnalysis && typeof videoAnalysis === 'object'
           ? `- 動画解析データあり: format_video_stats ツールに以下の JSON を渡してください: ${JSON.stringify(videoAnalysis)}`
           : '',
+        riotPuuid
+          ? `- Riot PUUID: ${riotPuuid} (get_riot_stats ツールを呼んで直近スタッツを取得してください)`
+          : '',
       ].filter(Boolean).join('\n');
 
       const result = await _createAgent().invoke(userMessage);
@@ -220,6 +274,8 @@ router.post("/analyze", requireAuth, async (req, res) => {
       }
     } catch (strandsErr) {
       console.warn('[strands] エラー、SDK フォールバックへ:', strandsErr.message);
+    } finally {
+      if (riotPuuid && _clearRiotContext) _clearRiotContext(riotPuuid);
     }
   }
 

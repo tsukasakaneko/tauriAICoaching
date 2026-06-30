@@ -35,6 +35,18 @@ for (const col of [
   try { db.exec(col); } catch { /* column already exists */ }
 }
 
+// Riot ID SSO columns — AES-GCM encrypted tokens, never stored in plaintext
+for (const col of [
+  "ALTER TABLE users ADD COLUMN riot_puuid TEXT",
+  "ALTER TABLE users ADD COLUMN riot_game_name TEXT",
+  "ALTER TABLE users ADD COLUMN riot_tag_line TEXT",
+  "ALTER TABLE users ADD COLUMN riot_access_token TEXT",
+  "ALTER TABLE users ADD COLUMN riot_refresh_token TEXT",
+  "ALTER TABLE users ADD COLUMN riot_token_expires_at INTEGER",
+]) {
+  try { db.exec(col); } catch { /* column already exists */ }
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS purchases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

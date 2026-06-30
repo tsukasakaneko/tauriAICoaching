@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import type { AiConfig, AiProvider, LicenseStatus, UsageStatus } from "../types";
+import { useState, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import type { AiConfig, AiProvider, LicenseStatus, UsageStatus, RiotLinkStatus } from "../types";
 import { api, tauriApi } from "../api";
 
 interface Props {
@@ -31,6 +32,10 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [riotStatus, setRiotStatus] = useState<RiotLinkStatus | null>(null);
+  const [linkingRiot, setLinkingRiot] = useState(false);
+  const [unlinkingRiot, setUnlinkingRiot] = useState(false);
+  const riotSseRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -41,6 +46,8 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
       setConfig(cfg);
       setLicenseStatus(lic);
       setUsageStatus(usage);
+      // Load Riot status separately — non-fatal if unavailable (e.g. free tier)
+      api.getRiotLinkStatus().then(setRiotStatus).catch(() => {});
     }).catch((err) => {
       setLoadError(
         err instanceof Error ? err.message : "設定の読み込みに失敗しました"
@@ -48,6 +55,10 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
     }).finally(() => {
       setLoading(false);
     });
+
+    return () => {
+      riotSseRef.current?.close();
+    };
   }, []);
 
   const flash = (msg: string, isError = false) => {
@@ -143,6 +154,67 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
     }
   };
 
+  const handleLinkRiot = async () => {
+    setLinkingRiot(true);
+    try {
+      const { url } = await api.getRiotAuthUrl();
+      await invoke<void>("open_external_url", { url });
+
+      // Listen for riot_linked SSE event (reuses the autorecord status stream)
+      const es = api.createRecordingEventSource();
+      riotSseRef.current = es;
+
+      const timeout = setTimeout(() => {
+        es.close();
+        riotSseRef.current = null;
+        setLinkingRiot(false);
+        flash("Riot連携がタイムアウトしました。もう一度お試しください。", true);
+      }, 2 * 60 * 1000);
+
+      es.addEventListener("riot_linked", (e: MessageEvent) => {
+        clearTimeout(timeout);
+        es.close();
+        riotSseRef.current = null;
+        const data = JSON.parse(e.data) as { gameName: string | null; tagLine: string | null };
+        setRiotStatus({ linked: true, gameName: data.gameName ?? undefined, tagLine: data.tagLine ?? undefined });
+        setLinkingRiot(false);
+        flash(`Riot ID 連携完了: ${data.gameName ?? ""}#${data.tagLine ?? ""}`);
+      });
+
+      es.addEventListener("riot_link_error", () => {
+        clearTimeout(timeout);
+        es.close();
+        riotSseRef.current = null;
+        setLinkingRiot(false);
+        flash("Riot連携に失敗しました。もう一度お試しください。", true);
+      });
+
+      es.onerror = () => {
+        clearTimeout(timeout);
+        es.close();
+        riotSseRef.current = null;
+        setLinkingRiot(false);
+        flash("Riot連携中に接続エラーが発生しました。", true);
+      };
+    } catch (err) {
+      setLinkingRiot(false);
+      flash(err instanceof Error ? err.message : "Riot連携の開始に失敗しました", true);
+    }
+  };
+
+  const handleUnlinkRiot = async () => {
+    setUnlinkingRiot(true);
+    try {
+      await api.unlinkRiot();
+      setRiotStatus({ linked: false });
+      flash("Riot IDの連携を解除しました");
+    } catch (err) {
+      flash(err instanceof Error ? err.message : "連携解除に失敗しました", true);
+    } finally {
+      setUnlinkingRiot(false);
+    }
+  };
+
   const tierBadge = (tier: string) => {
     if (tier === "pro") return <span className="badge paid">Pro</span>;
     if (tier === "cloud") return <span className="badge cloud">Cloud AI</span>;
@@ -235,6 +307,45 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
               VCLOUD（月額/年額サブスク） / VCREDIT（クレジットパック）
             </p>
           </div>
+        </section>
+
+        {/* ── Riot ID 連携 Section ─────────────────── */}
+        <section className="settings-section">
+          <h3>Riot ID 連携</h3>
+          <p className="hint-text">
+            Riot IDを連携すると、直近5試合のKDA・HS率・ランクがAIコーチングに自動反映されます。
+          </p>
+
+          {licenseStatus && licenseStatus.tier === "free" ? (
+            <p className="hint-text" style={{ color: "var(--accent)" }}>
+              Riot ID連携は有料プランのみ利用できます。
+            </p>
+          ) : riotStatus?.linked ? (
+            <div className="riot-linked-info">
+              <div className="license-row">
+                <span>連携中</span>
+                <strong className="riot-id-badge">
+                  {riotStatus.gameName}#{riotStatus.tagLine}
+                </strong>
+              </div>
+              <button
+                className="text-btn"
+                onClick={handleUnlinkRiot}
+                disabled={unlinkingRiot}
+                style={{ color: "var(--danger, #f87171)", marginTop: "0.5rem" }}
+              >
+                {unlinkingRiot ? "解除中..." : "連携解除"}
+              </button>
+            </div>
+          ) : (
+            <button
+              className="primary-btn"
+              onClick={handleLinkRiot}
+              disabled={linkingRiot}
+            >
+              {linkingRiot ? "ブラウザで認証中..." : "Riot IDを連携する"}
+            </button>
+          )}
         </section>
 
         {/* ── AI Provider Section ──────────────────── */}

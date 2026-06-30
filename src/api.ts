@@ -10,6 +10,7 @@ import type {
   ActivationResult,
   UsageStatus,
   ReplayData,
+  RiotLinkStatus,
 } from "./types";
 
 const BASE_URL = "http://127.0.0.1:3001";
@@ -82,6 +83,16 @@ export const api = {
     const token = getToken() ?? "";
     return new EventSource(`${BASE_URL}/autorecord/status?token=${encodeURIComponent(token)}`);
   },
+
+  // ── Riot ID SSO ────────────────────────────────────────────────────────────
+  getRiotAuthUrl: () =>
+    request<{ url: string }>("/auth/riot"),
+
+  getRiotLinkStatus: () =>
+    request<RiotLinkStatus>("/auth/riot/status"),
+
+  unlinkRiot: () =>
+    request<{ ok: boolean }>("/auth/riot", { method: "DELETE" }),
 };
 
 // ─── Tauri command wrappers ───────────────────────────────────────────────────
