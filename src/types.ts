@@ -144,3 +144,11 @@ export interface ReplayData {
   meta: MatchMeta | null;
 }
 
+// ─── Riot ID SSO types ────────────────────────────────────────────────────────
+
+export interface RiotLinkStatus {
+  linked: boolean;
+  gameName?: string;
+  tagLine?: string;
+}
+

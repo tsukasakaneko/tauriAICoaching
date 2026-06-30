@@ -18,6 +18,19 @@ if (process.env.JWT_SECRET === 'your-super-secret-jwt-key-change-this-in-product
   process.exit(1);
 }
 
+// If Riot OAuth is configured, the encryption key must also be set
+if (process.env.RIOT_CLIENT_ID && !process.env.RIOT_ENCRYPTION_KEY) {
+  console.error(
+    "FATAL: RIOT_CLIENT_ID が設定されていますが RIOT_ENCRYPTION_KEY が未設定です。\n" +
+    "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\" で生成して .env に追加してください。"
+  );
+  process.exit(1);
+}
+if (process.env.RIOT_ENCRYPTION_KEY && process.env.RIOT_ENCRYPTION_KEY.length !== 64) {
+  console.error("FATAL: RIOT_ENCRYPTION_KEY は64文字のhex文字列（32バイト）である必要があります。");
+  process.exit(1);
+}
+
 const authRoutes = require("./routes/auth");
 const { router: coachingRouter } = require("./routes/coaching");
 const { router: autoRecordRouter } = require("./routes/autorecord");

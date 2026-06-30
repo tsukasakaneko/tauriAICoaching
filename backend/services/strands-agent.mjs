@@ -6,6 +6,9 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
 import { parse as parseToml } from 'smol-toml';
+import { createRequire } from 'module';
+
+const _require = createRequire(import.meta.url);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -98,6 +101,40 @@ const formatVideoStats = tool({
   },
 });
 
+// Per-request Riot context: puuid → decrypted access token.
+// Set by coaching.js before calling createStrandsAgent().invoke(), cleared after.
+// Keeps the access token out of the AI message context.
+const _riotContext = new Map();
+
+export function setRiotContext(puuid, accessToken) {
+  _riotContext.set(puuid, accessToken);
+}
+
+export function clearRiotContext(puuid) {
+  _riotContext.delete(puuid);
+}
+
+const getRiotStats = tool({
+  name: 'get_riot_stats',
+  description: 'プレイヤーのRiot IDに紐づいた直近5試合のKDA・HS率と現在のランクを取得する。PUUIDが提供されている場合のみ呼ぶ。',
+  inputSchema: z.object({
+    puuid: z.string().describe('プレイヤーのPUUID'),
+  }),
+  callback: async ({ puuid }) => {
+    const accessToken = _riotContext.get(puuid);
+    if (!accessToken) {
+      return 'Riot連携データが利用できません。手動入力データのみで分析します。';
+    }
+    try {
+      const riotApi = _require('./riotApi.js');
+      return await riotApi.getAggregatedStats(puuid, accessToken);
+    } catch (err) {
+      console.warn('[get_riot_stats] error:', err.message);
+      return 'Riot APIからデータを取得できませんでした。手動入力データのみで分析します。';
+    }
+  },
+});
+
 export const CoachingReportSchema = z.object({
   improvements: z.array(
     z.object({
@@ -121,6 +158,8 @@ const SYSTEM_PROMPT = `あなたはValorantのプロコーチです。
 1. lookup_agent_knowledge でプレイヤーが使用するエージェントの特性を確認
 2. lookup_rank_guidance でプレイヤーのランクに合ったコーチング方針を確認
 3. 動画データがある場合は format_video_stats でデータを整形
+4. Riot PUUID が提供されている場合は get_riot_stats でリアルタイムスタッツを取得
+   (PUUIDが提供されていない場合はスキップ)
 
 ツールで得た情報をすべて統合して、具体的で行動レベルに落としたコーチングレポートを日本語で生成してください。
 抽象的な表現は禁止。「〇〇してください」「〇〇を毎日△分行う」のような具体的なアクションを含めること。`;
@@ -129,7 +168,7 @@ export function createStrandsAgent(apiKey) {
   const anthropicProvider = createAnthropic({ apiKey });
   return new Agent({
     model: new VercelModel({ provider: anthropicProvider('claude-sonnet-4-6') }),
-    tools: [lookupAgentKnowledge, lookupRankGuidance, formatVideoStats],
+    tools: [lookupAgentKnowledge, lookupRankGuidance, formatVideoStats, getRiotStats],
     systemPrompt: SYSTEM_PROMPT,
     structuredOutputSchema: CoachingReportSchema,
     printer: false,

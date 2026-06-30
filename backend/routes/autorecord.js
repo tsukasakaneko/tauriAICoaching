@@ -9,6 +9,8 @@ const screenRecorder = require('../services/screenRecorder');
 const { analyzeVideo } = require('../services/videoAnalyzer');
 const eventLog = require('../services/eventLog');
 
+const sseRegistry = require('../services/sseRegistry');
+
 const router = express.Router();
 
 // ─── Auth helper for SSE (token in query param) ───────────────────────────────
@@ -41,28 +43,14 @@ function requireAuth(req, res, next) {
   }
 }
 
-// ─── Per-user SSE client registry ────────────────────────────────────────────
-
-const sseClients = new Map(); // userId → Set<Response>
-
-function broadcast(userId, eventName, data) {
-  const clients = sseClients.get(userId);
-  if (!clients) return;
-  const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const res of [...clients]) {
-    try { res.write(payload); } catch { clients.delete(res); }
-  }
-}
-
 // Active recording session per user (in-memory)
 const activeSessions = new Map(); // userId → { sessionId, recordingPath }
 
 // ─── Wire up monitor events ───────────────────────────────────────────────────
 
 screenMonitor.on('stateChanged', (newState, _prev) => {
-  // Broadcast to all connected SSE clients (global state — one monitor for all)
-  for (const [userId] of sseClients) {
-    broadcast(userId, 'state_change', { state: newState, timestamp: new Date().toISOString() });
+  for (const userId of sseRegistry.getAllUserIds()) {
+    sseRegistry.broadcast(userId, 'state_change', { state: newState, timestamp: new Date().toISOString() });
   }
 });
 
@@ -71,7 +59,7 @@ screenMonitor.on('matchStarted', () => {
   const recordingPath = screenRecorder.start('shared');
   const matchStartTime = new Date().toISOString();
 
-  for (const [userId] of sseClients) {
+  for (const userId of sseRegistry.getAllUserIds()) {
     // Create a DB session per user that all point to the same recording file
     const session = db.prepare(
       `INSERT INTO match_sessions (user_id, match_started_at, recording_path, status)
@@ -79,7 +67,7 @@ screenMonitor.on('matchStarted', () => {
     ).run(userId, recordingPath);
 
     activeSessions.set(userId, { sessionId: session.lastInsertRowid, recordingPath });
-    broadcast(userId, 'recording_started', {
+    sseRegistry.broadcast(userId, 'recording_started', {
       state: 'match_active',
       matchStartTime,
       sessionId: session.lastInsertRowid,
@@ -98,17 +86,17 @@ screenMonitor.on('resultScreenDetected', async () => {
   }
 
   // Collect users who have an active session before starting async work
-  const activeUsers = [...sseClients.keys()].filter(uid => activeSessions.has(uid));
+  const activeUsers = [...sseRegistry.getAllUserIds()].filter(uid => activeSessions.has(uid));
 
   // Analyze the video ONCE, then fan out results to each user
   const broadcastProgress = (prog) => {
     for (const userId of activeUsers) {
-      broadcast(userId, 'analysis_progress', { ...prog, timestamp: new Date().toISOString() });
+      sseRegistry.broadcast(userId, 'analysis_progress', { ...prog, timestamp: new Date().toISOString() });
     }
   };
 
   for (const userId of activeUsers) {
-    broadcast(userId, 'state_change', { state: 'analyzing', timestamp: new Date().toISOString() });
+    sseRegistry.broadcast(userId, 'state_change', { state: 'analyzing', timestamp: new Date().toISOString() });
     db.prepare(
       `UPDATE match_sessions SET match_ended_at = datetime('now'), status = 'analyzing' WHERE id = ?`
     ).run(activeSessions.get(userId).sessionId);
@@ -129,7 +117,7 @@ screenMonitor.on('resultScreenDetected', async () => {
       } catch (logErr) {
         console.warn('[autorecord] failed to persist match events:', logErr.message);
       }
-      broadcast(userId, 'form_ready', { state: 'done', videoAnalysis, sessionId: session.sessionId, timestamp: new Date().toISOString() });
+      sseRegistry.broadcast(userId, 'form_ready', { state: 'done', videoAnalysis, sessionId: session.sessionId, timestamp: new Date().toISOString() });
       activeSessions.delete(userId);
     }
   } catch (err) {
@@ -140,7 +128,7 @@ screenMonitor.on('resultScreenDetected', async () => {
       db.prepare(
         `UPDATE match_sessions SET status = 'error', error_message = ? WHERE id = ?`
       ).run(err.message, session.sessionId);
-      broadcast(userId, 'error', { state: 'error', errorMessage: err.message });
+      sseRegistry.broadcast(userId, 'error', { state: 'error', errorMessage: err.message });
       activeSessions.delete(userId);
     }
   } finally {
@@ -174,8 +162,7 @@ router.get('/autorecord/status', (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
-  if (!sseClients.has(user.id)) sseClients.set(user.id, new Set());
-  sseClients.get(user.id).add(res);
+  sseRegistry.register(user.id, res);
 
   // Send current state immediately
   res.write(`event: connected\ndata: ${JSON.stringify({
@@ -198,11 +185,7 @@ router.get('/autorecord/status', (req, res) => {
 
   req.on('close', () => {
     clearInterval(heartbeat);
-    const clients = sseClients.get(user.id);
-    if (clients) {
-      clients.delete(res);
-      if (clients.size === 0) sseClients.delete(user.id);
-    }
+    sseRegistry.unregister(user.id, res);
   });
 });
 

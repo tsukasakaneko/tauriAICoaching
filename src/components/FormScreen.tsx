@@ -9,7 +9,7 @@ import type {
   UsageStatus,
   AiProvider,
 } from "../types";
-import { tauriApi } from "../api";
+import { tauriApi, api } from "../api";
 
 const RANKS: Rank[] = [
   "アイアン", "ブロンズ", "シルバー", "ゴールド", "プラチナ",
@@ -87,11 +87,13 @@ export default function FormScreen({
   const [analysisStep, setAnalysisStep] = useState(0);
   const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
   const [aiProvider, setAiProvider] = useState<AiProvider>("cloud");
+  const [riotLinked, setRiotLinked] = useState(false);
   const stepTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     tauriApi.getUsageStatus().then(setUsageStatus).catch(() => {});
     tauriApi.getAiConfig().then((cfg) => setAiProvider(cfg.provider)).catch(() => {});
+    api.getRiotLinkStatus().then((s) => setRiotLinked(s.linked)).catch(() => {});
   }, []);
 
   // Persist form data across navigation
@@ -220,6 +222,13 @@ export default function FormScreen({
             KDA {videoAnalysis.kills}/{videoAnalysis.deaths}/{videoAnalysis.assists} ·
             HS率 {Math.round(videoAnalysis.headshotRate * 100)}%
           </span>
+        </div>
+      )}
+
+      {riotLinked && (
+        <div className="video-analysis-badge" style={{ borderColor: "var(--riot-red, #ff4655)" }}>
+          <span>🎯 Riotスタッツ使用中</span>
+          <span className="badge-detail">直近5試合データで分析精度を強化</span>
         </div>
       )}
 
