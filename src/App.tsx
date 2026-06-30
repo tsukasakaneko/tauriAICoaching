@@ -5,6 +5,7 @@ import LoginScreen from "./components/LoginScreen";
 import FormScreen from "./components/FormScreen";
 import ReportScreen from "./components/ReportScreen";
 import AutoRecordScreen from "./components/AutoRecordScreen";
+import ReplayScreen from "./components/ReplayScreen";
 import SettingsScreen from "./components/SettingsScreen";
 import UpgradeModal from "./components/UpgradeModal";
 
@@ -13,6 +14,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [report, setReport] = useState<CoachingReport | null>(null);
   const [videoAnalysis, setVideoAnalysis] = useState<VideoAnalysisResult | null>(null);
+  const [sessionId, setSessionId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
@@ -45,6 +47,7 @@ export default function App() {
     setUser(null);
     setReport(null);
     setVideoAnalysis(null);
+    setSessionId(null);
     setScreen("login");
   };
 
@@ -53,8 +56,9 @@ export default function App() {
     setScreen("report");
   };
 
-  const handleAnalysisDone = (analysis: VideoAnalysisResult) => {
+  const handleAnalysisDone = (analysis: VideoAnalysisResult, sid: number | null) => {
     setVideoAnalysis(analysis);
+    setSessionId(sid);
     setScreen("form");
   };
 
@@ -83,11 +87,20 @@ export default function App() {
       {screen === "report" && report && (
         <ReportScreen
           report={report}
+          sessionId={sessionId}
           onBack={() => {
             setVideoAnalysis(null);
             setScreen("form");
           }}
           onUpgrade={() => setShowUpgradeModal(true)}
+          onReplay={() => setScreen("replay")}
+        />
+      )}
+
+      {screen === "replay" && sessionId !== null && (
+        <ReplayScreen
+          sessionId={sessionId}
+          onBack={() => setScreen("report")}
         />
       )}
 

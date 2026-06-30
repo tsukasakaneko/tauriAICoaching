@@ -4,11 +4,13 @@ import { tauriApi } from "../api";
 
 interface Props {
   report: CoachingReport;
+  sessionId: number | null;
   onBack: () => void;
   onUpgrade: () => void;
+  onReplay: () => void;
 }
 
-export default function ReportScreen({ report, onBack, onUpgrade }: Props) {
+export default function ReportScreen({ report, sessionId, onBack, onUpgrade, onReplay }: Props) {
   const [isFree, setIsFree] = useState(false);
 
   useEffect(() => {
@@ -26,6 +28,11 @@ export default function ReportScreen({ report, onBack, onUpgrade }: Props) {
         <div className="brand-small">
           <span className="brand-accent">VALORANT</span> AI Coaching
         </div>
+        {sessionId !== null && (
+          <button className="secondary-btn" onClick={onReplay}>
+            リプレイを見る →
+          </button>
+        )}
       </div>
 
       <h1 className="report-title">AIコーチングレポート</h1>

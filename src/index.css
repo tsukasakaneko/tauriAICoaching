@@ -757,3 +757,59 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
 }
 .delete-confirm-box p { margin-bottom: 0.75rem; color: var(--error); font-size: 0.9rem; }
 .delete-confirm-actions { display: flex; gap: 0.75rem; align-items: center; }
+
+/* ── Replay Screen ─────────────────────────────────────────────────────────── */
+.secondary-btn {
+  background: var(--surface);
+  color: var(--accent);
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--accent);
+  font-size: 0.9rem;
+}
+.secondary-btn:hover { background: rgba(255, 70, 84, 0.1); }
+
+.replay-screen {}
+
+.event-log-wrapper {
+  overflow-x: auto;
+}
+
+.event-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.event-log-table th,
+.event-log-table td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.event-log-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.event-row.event-type-kill td { color: var(--accent); }
+.event-row.event-type-death td { color: var(--text-muted); }
+
+.no-events-msg {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1.5rem 0;
+}
+
+.loading-text {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.error-text {
+  color: var(--error);
+  text-align: center;
+  padding: 1rem 0;
+}

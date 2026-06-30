@@ -81,6 +81,25 @@ async function classifyScreen(imageBuf) {
   return { state: classes[maxIdx] || 'unknown', confidence: probs[maxIdx] };
 }
 
+// Classify an image with an arbitrary single-label classifier model.
+// Returns: { label: string|null, confidence: number }
+async function classifyImage(imageBuf, modelName, classes, inputSize = MODEL_INPUT_SIZE) {
+  if (process.env.SIMULATE_YOLO === 'true') {
+    return { label: null, confidence: 0 };
+  }
+
+  const session = await loadModel(modelName);
+  if (!session) return { label: null, confidence: 0 };
+
+  const tensor = await preprocessImage(imageBuf, inputSize, inputSize);
+  const input = new getOrt().Tensor('float32', tensor, [1, 3, inputSize, inputSize]);
+  const output = await session.run({ images: input });
+
+  const probs = Array.from(output[Object.keys(output)[0]].data);
+  const maxIdx = probs.indexOf(Math.max(...probs));
+  return { label: classes[maxIdx] ?? null, confidence: probs[maxIdx] ?? 0 };
+}
+
 // Detect objects in a frame using a named model
 // Returns: Array<{ class: string, confidence: number, bbox: [x,y,w,h] }>
 async function detectObjects(imageBuf, modelName, classes) {
@@ -186,4 +205,4 @@ function simulateDetections(modelName) {
   return [];
 }
 
-module.exports = { classifyScreen, detectObjects, loadModel };
+module.exports = { classifyScreen, classifyImage, detectObjects, loadModel };

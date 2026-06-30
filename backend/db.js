@@ -79,4 +79,33 @@ db.exec(`
   ON match_sessions(user_id, status)
 `);
 
+// ─── Replay analysis (Phase 1) ────────────────────────────────────────────────
+
+// Per-frame timeline: positions, kills, deaths, etc. for a session
+db.exec(`
+  CREATE TABLE IF NOT EXISTS match_events (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   INTEGER NOT NULL REFERENCES match_sessions(id) ON DELETE CASCADE,
+    frame_idx    INTEGER NOT NULL,
+    t_ms         INTEGER NOT NULL,
+    event_type   TEXT    NOT NULL,           -- 'position' | 'kill' | 'death' | ...
+    payload_json TEXT                         -- event-specific data (e.g. {"x":..,"y":..})
+  )
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_match_events_session_t
+  ON match_events(session_id, t_ms)
+`);
+
+// One row per session: detected map and side context
+db.exec(`
+  CREATE TABLE IF NOT EXISTS match_meta (
+    session_id        INTEGER PRIMARY KEY REFERENCES match_sessions(id) ON DELETE CASCADE,
+    map_name          TEXT,
+    agent             TEXT,
+    ally_side_initial TEXT                     -- 'attack' | 'defense' | null
+  )
+`);
+
 module.exports = db;

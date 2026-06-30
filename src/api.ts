@@ -9,6 +9,7 @@ import type {
   LicenseStatus,
   ActivationResult,
   UsageStatus,
+  ReplayData,
 } from "./types";
 
 const BASE_URL = "http://127.0.0.1:3001";
@@ -72,6 +73,9 @@ export const api = {
 
   getLatestAnalysis: () =>
     request<VideoAnalysisResult | null>("/autorecord/latest"),
+
+  getSessionEvents: (sessionId: number) =>
+    request<ReplayData>(`/sessions/${sessionId}/events`),
 
   // SSE factory — EventSource needs the token as a query param
   createRecordingEventSource: (): EventSource => {

@@ -8,6 +8,7 @@ export interface AutoRecordStatus {
   analysisProgress: number;    // 0–1
   analysisStep: string;
   videoAnalysis: VideoAnalysisResult | null;
+  sessionId: number | null;
   errorMessage: string | null;
   matchStartTime: Date | null;
 }
@@ -18,6 +19,7 @@ const INITIAL_STATUS: AutoRecordStatus = {
   analysisProgress: 0,
   analysisStep: "",
   videoAnalysis: null,
+  sessionId: null,
   errorMessage: null,
   matchStartTime: null,
 };
@@ -99,6 +101,7 @@ export function useAutoRecord() {
         state: "done",
         isRecording: false,
         videoAnalysis: data.videoAnalysis ?? null,
+        sessionId: data.sessionId ?? null,
         analysisProgress: 1,
       }));
     });

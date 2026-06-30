@@ -13,9 +13,10 @@ class KillfeedStats {
     this.abilityKills = 0;
     this._lastDetectedKill = false;
     this._lastDetectedDeath = false;
+    this._events = [];  // [{ frameIdx, type, payload }]
   }
 
-  async processFrame(imageBuf) {
+  async processFrame(imageBuf, frameIdx = 0) {
     const detections = await detectObjects(imageBuf, 'valorant_killfeed', KILLFEED_CLASSES);
 
     const hasOwnKill = detections.some(d => d.class === 'own_kill');
@@ -28,13 +29,23 @@ class KillfeedStats {
       this.kills++;
       if (hasHeadshot) this.headshotKills++;
       if (hasAbility) this.abilityKills++;
+      this._events.push({
+        frameIdx,
+        type: 'kill',
+        payload: { headshot: hasHeadshot, ability: hasAbility },
+      });
     }
     if (hasOwnDeath && !this._lastDetectedDeath) {
       this.deaths++;
+      this._events.push({ frameIdx, type: 'death', payload: {} });
     }
 
     this._lastDetectedKill = hasOwnKill;
     this._lastDetectedDeath = hasOwnDeath;
+  }
+
+  getEvents() {
+    return this._events;
   }
 
   toResult() {

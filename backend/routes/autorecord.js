@@ -7,6 +7,7 @@ const db = require('../db');
 const screenMonitor = require('../services/screenMonitor');
 const screenRecorder = require('../services/screenRecorder');
 const { analyzeVideo } = require('../services/videoAnalyzer');
+const eventLog = require('../services/eventLog');
 
 const router = express.Router();
 
@@ -114,7 +115,7 @@ screenMonitor.on('resultScreenDetected', async () => {
   }
 
   try {
-    const videoAnalysis = await analyzeVideo(videoPath, broadcastProgress);
+    const { result: videoAnalysis, events, meta } = await analyzeVideo(videoPath, broadcastProgress);
 
     for (const userId of activeUsers) {
       const session = activeSessions.get(userId);
@@ -122,7 +123,13 @@ screenMonitor.on('resultScreenDetected', async () => {
       db.prepare(
         `UPDATE match_sessions SET video_analysis_json = ?, status = 'done' WHERE id = ?`
       ).run(JSON.stringify(videoAnalysis), session.sessionId);
-      broadcast(userId, 'form_ready', { state: 'done', videoAnalysis, timestamp: new Date().toISOString() });
+      // Persist the per-frame timeline + map for this session (one analysis → many sessions)
+      try {
+        eventLog.persist(session.sessionId, events, meta);
+      } catch (logErr) {
+        console.warn('[autorecord] failed to persist match events:', logErr.message);
+      }
+      broadcast(userId, 'form_ready', { state: 'done', videoAnalysis, sessionId: session.sessionId, timestamp: new Date().toISOString() });
       activeSessions.delete(userId);
     }
   } catch (err) {
@@ -231,6 +238,32 @@ router.get('/autorecord/state', requireAuth, (req, res) => {
     state: screenMonitor.state,
     isRecording: screenRecorder.isRecording,
   });
+});
+
+// Events for a completed session (Phase 2 replay) — paid feature
+router.get('/sessions/:id/events', requireAuth, (req, res) => {
+  if (req.user.is_paid !== 1) {
+    return res.status(403).json({ message: 'この機能はライセンスキーが必要です。' });
+  }
+
+  const sessionId = parseInt(req.params.id, 10);
+  if (isNaN(sessionId)) return res.status(400).json({ message: '無効なセッション ID です' });
+
+  const session = db.prepare(
+    'SELECT user_id FROM match_sessions WHERE id = ?'
+  ).get(sessionId);
+  if (!session) return res.status(404).json({ message: 'セッションが見つかりません' });
+  if (session.user_id !== req.user.id) return res.status(403).json({ message: 'アクセス権がありません' });
+
+  const events = db.prepare(
+    'SELECT id, frame_idx, t_ms, event_type, payload_json FROM match_events WHERE session_id = ? ORDER BY t_ms ASC'
+  ).all(sessionId);
+
+  const meta = db.prepare(
+    'SELECT map_name, agent, ally_side_initial FROM match_meta WHERE session_id = ?'
+  ).get(sessionId) ?? null;
+
+  res.json({ events, meta });
 });
 
 // Latest analysis for this user

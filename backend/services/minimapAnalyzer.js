@@ -9,17 +9,27 @@ class MinimapAnalyzer {
     this._positions = [];  // [{x, y}] normalized 0-1
   }
 
-  async processFrame(imageBuf) {
+  async processFrame(imageBuf, frameIdx = 0) {
     const detections = await detectObjects(imageBuf, 'valorant_minimap', MINIMAP_CLASSES);
     const playerDot = detections.find(d => d.class === 'player_dot');
 
     if (playerDot) {
       const [x, y, w, h] = playerDot.bbox;
       this._positions.push({
-        x: (x + w / 2) / 640,  // normalize to 0-1
+        frameIdx,
+        x: (x + w / 2) / 640,  // normalize to 0-1 (YOLO 640px crop space; affine fix is Phase 2)
         y: (y + h / 2) / 640,
       });
     }
+  }
+
+  // Per-frame self position events for the timeline log.
+  getEvents() {
+    return this._positions.map(p => ({
+      frameIdx: p.frameIdx,
+      type: 'position',
+      payload: { x: p.x, y: p.y },
+    }));
   }
 
   toResult() {
