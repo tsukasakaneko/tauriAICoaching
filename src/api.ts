@@ -33,7 +33,8 @@ async function request<T>(path: string, options: RequestInit = {}, baseUrl = BAS
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
-  if (token) {
+  // 呼び出し側が明示した Authorization(例: ライセンストークン)を優先する
+  if (token && !headers["Authorization"]) {
     headers["Authorization"] = `Bearer ${token}`;
   }
   const res = await fetch(`${baseUrl}${path}`, { ...options, headers });
@@ -102,12 +103,18 @@ export const tauriApi = {
     }),
 
   // cloud tier + Cloud provider: routes through the remote server (developer's API key)
-  analyzeRemote: (
+  // P0-1: 認証はアクティベート時に発行されたライセンストークン。消費もサーバー側。
+  analyzeRemote: async (
     formData: CoachingFormData,
     videoAnalysis: VideoAnalysisResult | null
-  ): Promise<CoachingReport> =>
-    request<CoachingReport>("/analyze", {
+  ): Promise<CoachingReport> => {
+    const licenseToken = await invoke<string | null>("get_license_token");
+    if (!licenseToken) {
+      throw new Error("ライセンスキーが必要です。設定画面からキーをアクティベートしてください。");
+    }
+    return request<CoachingReport>("/analyze", {
       method: "POST",
+      headers: { Authorization: `Bearer ${licenseToken}` },
       body: JSON.stringify({
         rank: formData.rank,
         agent: formData.agent,
@@ -115,7 +122,8 @@ export const tauriApi = {
         review: formData.review,
         videoAnalysis: videoAnalysis ?? null,
       }),
-    }, REMOTE_API_URL),
+    }, REMOTE_API_URL);
+  },
 
   getAiConfig: (): Promise<AiConfig> => invoke<AiConfig>("get_ai_config"),
 

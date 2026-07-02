@@ -45,14 +45,6 @@ fn get_cloud_credits(app: &AppHandle) -> i64 {
         .unwrap_or(0)
 }
 
-fn decrement_cloud_credits(app: &AppHandle) {
-    if let Ok(store) = app.store(STORE_PATH) {
-        let credits = (get_cloud_credits(app) - 1).max(0);
-        let _ = store.set(KEY_CLOUD_CREDITS, serde_json::json!(credits));
-        let _ = store.save();
-    }
-}
-
 #[tauri::command]
 pub async fn ai_analyze(
     app: AppHandle,
@@ -87,6 +79,8 @@ pub async fn ai_analyze(
                 }
             }
 
+            // 事前ガード(キャッシュ値)。残高の正はサーバー台帳で、
+            // クラウド分析はリモート /analyze がサーバー側で消費・拒否する。
             if config.provider == AiProviderType::Cloud {
                 if get_cloud_credits(&app) <= 0 {
                     return Err(
@@ -111,13 +105,8 @@ pub async fn ai_analyze(
     let system_prompt = build_system_prompt(&payload.agent, &payload.rank);
     let user_prompt = build_user_prompt(&payload);
 
-    let result = crate::ai_provider::call_ai(&http.0, &config, &system_prompt, &user_prompt).await?;
-
-    if tier == "cloud" && config.provider == AiProviderType::Cloud {
-        decrement_cloud_credits(&app);
-    }
-
-    Ok(result)
+    // クレジット消費はサーバー台帳側で行う(P0-1)。ローカルでのデクリメントは廃止。
+    crate::ai_provider::call_ai(&http.0, &config, &system_prompt, &user_prompt).await
 }
 
 #[tauri::command]
@@ -170,9 +159,14 @@ pub async fn test_ollama(
 }
 
 #[tauri::command]
-pub fn get_usage_status(app: AppHandle) -> UsageStatus {
-    UsageStatus {
+pub async fn get_usage_status(
+    app: AppHandle,
+    http: State<'_, HttpClient>,
+) -> Result<UsageStatus, String> {
+    // サーバー台帳から最新残高を取得してキャッシュを更新(オフライン時はキャッシュ値)
+    let _ = crate::commands::license::refresh_status_from_server(&app, &http.0).await;
+    Ok(UsageStatus {
         tier: get_license_tier(&app),
         cloud_credits: get_cloud_credits(&app),
-    }
+    })
 }

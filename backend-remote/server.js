@@ -25,6 +25,9 @@ if (!process.env.ANTHROPIC_API_KEY) {
 const app = express();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// P0-1: サーバー側クレジット台帳(SQLite)
+const licenseStore = require('./license-store');
+
 // ── Stripe ────────────────────────────────────────────────────────────────────
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
@@ -94,6 +97,11 @@ function expiryForTier(tier) {
   // Credits: 1 year from now
   const d = new Date(now.getFullYear() + 1, now.getMonth(), 1);
   return { year: d.getFullYear() - 2020, month: d.getMonth() + 1 };
+}
+
+/** expiryForTier の {year(2020起点), month} を台帳用の "YYYY-MM" に変換する */
+function expiryString(exp) {
+  return `${2020 + exp.year}-${String(exp.month).padStart(2, '0')}`;
 }
 
 async function sendLicenseEmail(to, productLabel, licenseKey) {
@@ -183,6 +191,10 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
       const cfg = TIER_CONFIG[tier];
       const exp = expiryForTier(tier);
       const key = issueLicenseKey(cfg.tierCode, cfg.prefix, exp.year, exp.month);
+      // P0-1: メール送信前に台帳へ登録(失敗時は 500 → Stripe リトライ)
+      licenseStore.registerIssuedKey({
+        key, email, tier, credits: cfg.credits, expiresAt: expiryString(exp),
+      });
       await sendLicenseEmail(email, productLabel, key);
       console.log(`[stripe webhook] issued ${tier} key for ${email}`);
 
@@ -216,6 +228,9 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
       const cfg = TIER_CONFIG[tier];
       const exp = expiryForTier(tier);
       const key = issueLicenseKey(cfg.tierCode, cfg.prefix, exp.year, exp.month);
+      licenseStore.registerIssuedKey({
+        key, email, tier, credits: cfg.credits, expiresAt: expiryString(exp),
+      });
       await sendLicenseEmail(email, productLabel, key);
       console.log(`[stripe webhook] renewal: issued ${tier} key for ${email}`);
     }
@@ -289,29 +304,131 @@ function checkDailyLimit(userId) {
   return true;
 }
 
-// ── Auth middleware ───────────────────────────────────────────────────────────
-// Validates the JWT issued by the local backend. No DB lookup needed here —
-// the signature check is sufficient since we share the same JWT_SECRET.
-function requireAuth(req, res, next) {
+// ── License auth middleware ───────────────────────────────────────────────────
+// P0-1: /license/activate で発行したライセンストークンを検証する。
+// 旧実装のローカル backend JWT は同梱アプリから JWT_SECRET が抽出できるため信用しない。
+function requireLicense(req, res, next) {
   const auth = req.headers['authorization'];
   if (!auth?.startsWith('Bearer ')) {
-    return res.status(401).json({ message: '認証が必要です' });
+    return res.status(401).json({ message: 'ライセンスのアクティベートが必要です' });
   }
   try {
     const decoded = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
-    req.userId = String(decoded.id);
+    if (decoded.typ !== 'license' || !decoded.lid || !decoded.dev) {
+      return res.status(401).json({ message: 'ライセンストークンが無効です' });
+    }
+    req.license = { licenseId: decoded.lid, deviceHash: decoded.dev };
     next();
   } catch {
-    res.status(401).json({ message: 'トークンが無効または期限切れです' });
+    res.status(401).json({ message: 'ライセンストークンが無効または期限切れです。キーを再アクティベートしてください。' });
   }
+}
+
+function signLicenseToken(licenseId, deviceHash) {
+  return jwt.sign(
+    { typ: 'license', lid: licenseId, dev: deviceHash },
+    process.env.JWT_SECRET,
+    { expiresIn: '30d' },
+  );
+}
+
+// ── License activation rate limit (in-memory, per IP) ────────────────────────
+const activateAttempts = new Map(); // ip -> { windowStart: number, count: number }
+const ACTIVATE_WINDOW_MS = 60_000;
+const ACTIVATE_MAX_PER_WINDOW = 10;
+
+function checkActivateRateLimit(ip) {
+  const now = Date.now();
+  const entry = activateAttempts.get(ip);
+  if (!entry || now - entry.windowStart > ACTIVATE_WINDOW_MS) {
+    activateAttempts.set(ip, { windowStart: now, count: 1 });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= ACTIVATE_MAX_PER_WINDOW;
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
-app.post('/analyze', requireAuth, async (req, res) => {
-  if (!checkDailyLimit(req.userId)) {
+// ── License endpoints (P0-1) ──────────────────────────────────────────────────
+
+// キー検証 + 端末バインド + クレジット付与。成功時にライセンストークンを発行する。
+app.post('/license/activate', (req, res) => {
+  if (!checkActivateRateLimit(req.ip)) {
+    return res.status(429).json({ message: '試行回数が多すぎます。しばらく待ってから再度お試しください。' });
+  }
+
+  const { key, deviceHash } = req.body;
+  if (typeof key !== 'string' || key.length > 200 ||
+      typeof deviceHash !== 'string' || !/^[0-9a-f]{64}$/.test(deviceHash)) {
+    return res.status(400).json({ message: 'リクエストが不正です' });
+  }
+
+  try {
+    const result = licenseStore.activate(key, deviceHash);
+    if (result.error) {
+      return res.status(result.statusCode || 400).json({ message: result.error });
+    }
+
+    const status = licenseStore.statusForDevice(deviceHash);
+    res.json({
+      licenseToken: signLicenseToken(result.license.id, deviceHash),
+      tier: status.tier,
+      credits: status.credits,
+      expiresAt: status.expiresAt,
+      firstPaymentBonus: result.firstPaymentBonus,
+    });
+  } catch (err) {
+    console.error('[license/activate] error:', err);
+    res.status(500).json({ message: 'アクティベートに失敗しました。もう一度お試しください。' });
+  }
+});
+
+// 表示用ステータス(残高はサーバー台帳が正)
+app.get('/license/status', requireLicense, (req, res) => {
+  try {
+    res.json(licenseStore.statusForDevice(req.license.deviceHash));
+  } catch (err) {
+    console.error('[license/status] error:', err);
+    res.status(500).json({ message: 'ステータスの取得に失敗しました' });
+  }
+});
+
+// サーバー側デクリメント(通常は /analyze が内部で消費する)
+app.post('/credits/consume', requireLicense, (req, res) => {
+  try {
+    const result = licenseStore.consume(req.license.deviceHash);
+    if (result.error) {
+      return res.status(402).json({ message: result.error });
+    }
+    res.json({ credits: result.credits });
+  } catch (err) {
+    console.error('[credits/consume] error:', err);
+    res.status(500).json({ message: 'クレジットの消費に失敗しました' });
+  }
+});
+
+app.post('/analyze', requireLicense, async (req, res) => {
+  // 残高チェック(消費は分析成功後)。pro は無制限。
+  let licenseStatus;
+  try {
+    licenseStatus = licenseStore.statusForDevice(req.license.deviceHash);
+  } catch (err) {
+    console.error('[analyze] license status error:', err);
+    return res.status(500).json({ message: 'ライセンス情報の取得に失敗しました' });
+  }
+  if (licenseStatus.tier === 'free') {
+    return res.status(403).json({ message: 'ライセンスキーが必要です。設定画面からキーをアクティベートしてください。' });
+  }
+  if (licenseStatus.tier !== 'pro' && licenseStatus.credits <= 0) {
+    return res.status(402).json({
+      message: 'クラウドAIのクレジットが不足しています。VCREDITキーを入力してクレジットを追加してください。',
+    });
+  }
+
+  if (!checkDailyLimit(`lic:${req.license.licenseId}`)) {
     return res.status(429).json({
       message: `1日の分析回数上限（${DAILY_LIMIT}回）に達しました。明日またお試しください。`,
     });
@@ -426,6 +543,12 @@ app.post('/analyze', requireAuth, async (req, res) => {
       typeof parsed.summary.weaknesses !== 'string' || typeof parsed.summary.focus !== 'string'
     ) {
       throw new Error('AI response failed structural validation');
+    }
+
+    // 分析成功後にサーバー台帳から1クレジット消費(pro は消費なし)
+    if (licenseStatus.tier !== 'pro') {
+      const consumed = licenseStore.consume(req.license.deviceHash);
+      parsed.creditsRemaining = consumed.error ? 0 : consumed.credits;
     }
 
     res.json(parsed);

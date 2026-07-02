@@ -33,6 +33,7 @@ pub fn run() {
             commands::ai::test_ollama,
             commands::license::activate_license,
             commands::license::get_license_status,
+            commands::license::get_license_token,
             commands::shell::open_external_url,
         ])
         .setup(|app| {

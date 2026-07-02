@@ -16,7 +16,7 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
     ollama_model: "llama3.1:8b",
   });
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
-  const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
+  const [, setUsageStatus] = useState<UsageStatus | null>(null);
   const [licenseKey, setLicenseKey] = useState("");
   const [claudeKeyInput, setClaudeKeyInput] = useState("");
   const [loading, setLoading] = useState(true);
