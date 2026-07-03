@@ -94,8 +94,9 @@ function expiryForTier(tier) {
     const d = new Date(now.getFullYear() + 1, now.getMonth(), 1);
     return { year: d.getFullYear() - 2020, month: d.getMonth() + 1 };
   }
-  // Credits: 1 year from now
-  const d = new Date(now.getFullYear() + 1, now.getMonth(), 1);
+  // P0-4: クレジット系は購入から6ヶ月で失効。
+  // 資金決済法の前払式支払手段は有効期間6ヶ月以内なら適用除外となるため。
+  const d = new Date(now.getFullYear(), now.getMonth() + 6, 1);
   return { year: d.getFullYear() - 2020, month: d.getMonth() + 1 };
 }
 
