@@ -26,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             commands::ai::ai_analyze,
+            commands::ai::build_analysis_prompts,
             commands::ai::get_ai_config,
             commands::ai::set_ai_config,
             commands::ai::get_usage_status,

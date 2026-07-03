@@ -117,7 +117,9 @@ async function analyzeVideo(videoPath, onProgress) {
       dominantZone: mmResult.dominantZone,
       aggressiveness: mmResult.aggressiveness,
       positionVariety: mmResult.positionVariety,
-      deathsInLateRound: estimateLateRoundDeaths(kfResult.deaths),
+      // P0-3: 総デス数×40% の捏造推定はプロンプトに「客観データ」として
+      // 注入され AI が架空の根拠で断定するため廃止。実測できるまで null。
+      deathsInLateRound: null,
       longestLoseStreak: null,
       totalRounds: resultStats?.totalRounds ?? null,
       wonRounds: resultStats?.wonRounds ?? null,
@@ -127,11 +129,6 @@ async function analyzeVideo(videoPath, onProgress) {
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
-}
-
-function estimateLateRoundDeaths(totalDeaths) {
-  // Rough estimate: ~40% of deaths happen in late-round situations
-  return Math.round(totalDeaths * 0.4);
 }
 
 function buildStubResult() {
@@ -145,7 +142,7 @@ function buildStubResult() {
     dominantZone: 'mid',
     aggressiveness: 0.65,
     positionVariety: 'medium',
-    deathsInLateRound: 3,
+    deathsInLateRound: null,
     longestLoseStreak: 4,
     totalRounds: 24,
     wonRounds: 13,

@@ -434,7 +434,25 @@ app.post('/credits/consume', requireLicense, (req, res) => {
 });
 
 app.post('/analyze', optionalLicense, async (req, res) => {
-  const { rank, agent, selfAssessment, review, videoAnalysis } = req.body;
+  // P0-3: systemPrompt/userPrompt はクライアント(prompt_builder.rs)構築。
+  // videoAnalysis はコスト判定用フラグ(手動1・自動録画2)。
+  const { systemPrompt, userPrompt, videoAnalysis } = req.body;
+
+  // P0-3: プロンプト構築は Tauri 側 prompt_builder.rs に一元化。
+  // クライアントは知識ベース入りの構築済みプロンプトを送ってくる。
+  // 乱用は無料3回/日・クレジット消費・pro 30回/日・max_tokens・
+  // レスポンスの CoachingReport 構造検証で抑止する。
+  // 検証は日次カウント・クレジットに触れる前に行う。
+  const MAX_SYSTEM_PROMPT_LEN = 8_000;
+  const MAX_USER_PROMPT_LEN = 12_000;
+  if (typeof systemPrompt !== 'string' || systemPrompt.length === 0 ||
+      systemPrompt.length > MAX_SYSTEM_PROMPT_LEN) {
+    return res.status(400).json({ message: `systemPrompt は${MAX_SYSTEM_PROMPT_LEN}文字以内で必須です` });
+  }
+  if (typeof userPrompt !== 'string' || userPrompt.length === 0 ||
+      userPrompt.length > MAX_USER_PROMPT_LEN) {
+    return res.status(400).json({ message: `userPrompt は${MAX_USER_PROMPT_LEN}文字以内で必須です` });
+  }
 
   // P0-2: 無料3回/日+有料はクレジット消費(手動1・自動録画2)に一本化
   let cost = 0; // 分析成功後に消費するクレジット数(無料・pro は 0)
@@ -483,86 +501,6 @@ app.post('/analyze', optionalLicense, async (req, res) => {
       });
     }
   }
-
-  if (!rank || !agent) {
-    return res.status(400).json({ message: 'ランクとエージェントは必須です' });
-  }
-  if (typeof agent !== 'string' || agent.length > 60) {
-    return res.status(400).json({ message: 'エージェント名は60文字以内です' });
-  }
-  if (review && (typeof review !== 'string' || review.length > 2000)) {
-    return res.status(400).json({ message: '振り返りは2000文字以内です' });
-  }
-  if (selfAssessment && (!Array.isArray(selfAssessment) || selfAssessment.length > 10 ||
-      selfAssessment.some((s) => typeof s !== 'string' || s.length > 100))) {
-    return res.status(400).json({ message: '自己評価の値が不正です' });
-  }
-
-  const assessmentText = Array.isArray(selfAssessment) && selfAssessment.length > 0
-    ? selfAssessment.join('、')
-    : '特になし';
-
-  // Build user prompt (mirrors prompt_builder.rs)
-  let userPrompt = `プレイヤー情報:\n- ランク: ${rank}\n- エージェント: ${agent}\n- 自己評価の課題: ${assessmentText}\n- プレイ振り返り: ${review || '特になし'}\n`;
-
-  if (videoAnalysis && typeof videoAnalysis === 'object') {
-    const va = videoAnalysis;
-    userPrompt += '\n【自動解析データ (YOLOv8)】\n';
-    if (va.kills != null && va.deaths != null && va.assists != null)
-      userPrompt += `- KDA: ${va.kills}/${va.deaths}/${va.assists}\n`;
-    if (va.headshotRate != null)
-      userPrompt += `- ヘッドショット率: ${Math.round(va.headshotRate * 100)}%\n`;
-    if (va.damageDealt != null)
-      userPrompt += `- ダメージ合計: ${va.damageDealt}\n`;
-    if (va.abilityKills != null)
-      userPrompt += `- アビリティキル: ${va.abilityKills}回\n`;
-    if (va.dominantZone != null)
-      userPrompt += `- 主な活動エリア: ${va.dominantZone}\n`;
-    if (va.aggressiveness != null) {
-      const label = va.aggressiveness > 0.7 ? '積極的' : va.aggressiveness > 0.4 ? 'バランス型' : '慎重';
-      userPrompt += `- ポジショニング傾向: ${label} (スコア: ${va.aggressiveness.toFixed(2)})\n`;
-    }
-    if (va.deathsInLateRound != null)
-      userPrompt += `- ラウンド後半デス数: ${va.deathsInLateRound}回\n`;
-    if (va.longestLoseStreak != null)
-      userPrompt += `- 最長連敗ストリーク: ${va.longestLoseStreak}ラウンド\n`;
-    if (va.totalRounds != null && va.wonRounds != null)
-      userPrompt += `- ラウンド勝敗: ${va.wonRounds}/${va.totalRounds}\n`;
-    userPrompt += '\n上記の客観的データと、プレイヤーの自己評価を合わせて分析してください。\n';
-  }
-
-  userPrompt += '\n上記の情報を基に、Valorantのコーチングレポートを生成してください。必ず有効なJSONのみを返してください。';
-
-  const systemPrompt = `あなたはValorantのプロコーチです。
-全ランク帯（アイアン〜レディアント）のプレイヤーに対して、そのランクに合った具体的で実行可能な改善アドバイスを提供してください。
-抽象的な表現は禁止。必ず"行動レベル"に落としてください。
-データがある場合は必ず数値を引用して根拠を示してください（例: 「HS率が23%と低いため…」）。
-
-以下のJSON形式のみで返答してください：
-{
-  "improvements": [
-    {
-      "title": "改善点のタイトル",
-      "description": "詳細な説明（数値データがあれば引用）",
-      "cause": "問題の根本原因",
-      "actions": ["具体的なアクション1", "アクション2", "アクション3"]
-    }
-  ],
-  "training_plan": [
-    "Day1: 具体的なトレーニング内容",
-    "Day2: ...",
-    "Day3: ...",
-    "Day4: ...",
-    "Day5: ...",
-    "Day6: ...",
-    "Day7: ..."
-  ],
-  "summary": {
-    "strengths": "プレイヤーの強みの説明",
-    "weaknesses": "主な弱点の説明",
-    "focus": "最優先で取り組むべき課題"
-  }
-}`;
 
   try {
     const response = await anthropic.messages.create({

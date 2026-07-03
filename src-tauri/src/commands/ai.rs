@@ -18,6 +18,37 @@ pub struct UsageStatus {
     cloud_credits: i64,
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuiltPrompts {
+    system_prompt: String,
+    user_prompt: String,
+}
+
+const MAX_TOTAL_INPUT: usize = 10_000;
+
+fn check_input_size(payload: &AnalyzePayload) -> Result<(), String> {
+    let total_input_len = payload.rank.len()
+        + payload.agent.len()
+        + payload.review.len()
+        + payload.self_assessment.iter().map(|s| s.len()).sum::<usize>();
+    if total_input_len > MAX_TOTAL_INPUT {
+        return Err("入力データが大きすぎます。各フィールドを短くしてください。".to_string());
+    }
+    Ok(())
+}
+
+/// P0-3: プロンプト構築の一元化。リモート分析でもこのビルダー(知識ベース入り)を
+/// 使うため、フロントエンドが構築済みプロンプトを取得してサーバーへ送る。
+#[tauri::command]
+pub fn build_analysis_prompts(payload: AnalyzePayload) -> Result<BuiltPrompts, String> {
+    check_input_size(&payload)?;
+    Ok(BuiltPrompts {
+        system_prompt: build_system_prompt(&payload.agent, &payload.rank),
+        user_prompt: build_user_prompt(&payload),
+    })
+}
+
 fn load_ai_config(app: &AppHandle) -> AiConfig {
     let Ok(store) = app.store(STORE_PATH) else {
         return AiConfig::default();
@@ -93,14 +124,7 @@ pub async fn ai_analyze(
         _ => {} // "pro": unlimited
     }
 
-    const MAX_TOTAL_INPUT: usize = 10_000;
-    let total_input_len = payload.rank.len()
-        + payload.agent.len()
-        + payload.review.len()
-        + payload.self_assessment.iter().map(|s| s.len()).sum::<usize>();
-    if total_input_len > MAX_TOTAL_INPUT {
-        return Err("入力データが大きすぎます。各フィールドを短くしてください。".to_string());
-    }
+    check_input_size(&payload)?;
 
     let system_prompt = build_system_prompt(&payload.agent, &payload.rank);
     let user_prompt = build_user_prompt(&payload);
