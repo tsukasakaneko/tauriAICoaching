@@ -2,7 +2,11 @@ services:
   - type: web
     name: valorant-coaching-api
     env: node
-    plan: free
+    # P0-7: インフラ費最小化。重い処理(録画・YOLO解析)は全てユーザーの
+    # ローカルで動くため、この Express プロキシ+SQLite 台帳は最小プランで足りる。
+    # Starter(約$7/月)+ ディスク1GB(約$0.25/月)≈ 月1,200円 — 完了条件の5,000円以下。
+    # free はファイルシステムが揮発性でクレジット台帳が消えるため本番では使用不可。
+    plan: starter
     rootDir: backend-remote
     buildCommand: npm install
     startCommand: node server.js
@@ -36,11 +40,8 @@ services:
       - key: EMAIL_FROM
         sync: false          # 送信元メールアドレス
       - key: DB_PATH
-        value: ./data/licenses.db
-        # 注意: free プランはファイルシステムが揮発性のため、再デプロイ/再起動で
-        # クレジット台帳 (SQLite) が消えます。本番運用では Starter プラン以上に変更し、
-        # 以下のディスク設定を有効化して DB_PATH を /var/data/licenses.db にしてください。
-    # disk:
-    #   name: license-data
-    #   mountPath: /var/data
-    #   sizeGB: 1
+        value: /var/data/licenses.db   # 永続ディスク上に台帳を保存 (P0-1/P0-7)
+    disk:
+      name: license-data
+      mountPath: /var/data
+      sizeGB: 1
