@@ -27,6 +27,16 @@ npm run tauri dev    # 開発起動
 
 リモートAPI(ライセンス台帳・クラウド分析)は `backend-remote/` を参照(Render にデプロイ)。
 
+## 法務ドキュメント
+
+販売に関する法務文書は `docs/legal/` に置いています(購入 LP(P1-12)から掲載・リンクします)。
+
+- [特定商取引法に基づく表記](docs/legal/tokushoho.md)
+- [返金ポリシー](docs/legal/refund-policy.md)
+- [プライバシーポリシー](docs/legal/privacy-policy.md)
+
+※ 事業者情報のプレースホルダ(【】)は販売開始前に記入してください。
+
 ## 法的表記
 
 CoachMate for VALORANT は Riot Games によって承認・後援されたものではなく、Riot Games または
