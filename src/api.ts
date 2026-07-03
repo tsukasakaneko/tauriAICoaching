@@ -102,25 +102,25 @@ export const tauriApi = {
       },
     }),
 
-  // cloud tier + Cloud provider: routes through the remote server (developer's API key)
-  // P0-1: 認証はアクティベート時に発行されたライセンストークン。消費もサーバー側。
+  // free / cloud tier: routes through the remote server (developer's API key)
+  // P0-1: 有料はライセンストークン認証+サーバー側クレジット消費。
+  // P0-2: 無料はトークン無し+deviceHash で 3回/日(サーバー側 enforce)。
   analyzeRemote: async (
     formData: CoachingFormData,
     videoAnalysis: VideoAnalysisResult | null
   ): Promise<CoachingReport> => {
     const licenseToken = await invoke<string | null>("get_license_token");
-    if (!licenseToken) {
-      throw new Error("ライセンスキーが必要です。設定画面からキーをアクティベートしてください。");
-    }
+    const deviceHash = licenseToken ? null : await invoke<string>("get_device_hash");
     return request<CoachingReport>("/analyze", {
       method: "POST",
-      headers: { Authorization: `Bearer ${licenseToken}` },
+      headers: licenseToken ? { Authorization: `Bearer ${licenseToken}` } : undefined,
       body: JSON.stringify({
         rank: formData.rank,
         agent: formData.agent,
         selfAssessment: formData.selfAssessment,
         review: formData.review,
         videoAnalysis: videoAnalysis ?? null,
+        ...(deviceHash ? { deviceHash } : {}),
       }),
     }, REMOTE_API_URL);
   },

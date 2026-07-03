@@ -38,6 +38,7 @@ export default function UpgradeModal({ onClose, onGoToSettings }: Props) {
         <h2 className="modal-title">プランを選択</h2>
         <p className="modal-body">
           購入後、ライセンスキーをメールでお届けします。<br />
+          消費レート: 手動分析 1クレジット / 自動録画の分析 2クレジット<br />
           <strong className="bonus-highlight">🎁 初回アクティベートで +10クレジットボーナス！</strong>
         </p>
 

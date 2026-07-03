@@ -288,18 +288,21 @@ app.post('/create-checkout-session', async (req, res) => {
 });
 
 // ── Rate limiting (in-memory, resets on restart) ──────────────────────────────
-// Per-user daily limit prevents runaway usage on the free Anthropic key.
-const dailyUsage = new Map(); // userId -> { date: string, count: number }
-const DAILY_LIMIT = 30;
+// P0-2: 課金モデルの一本化。
+//   無料: 3回/日(端末ハッシュ単位)。有料(cloud系)はクレジットが上限として
+//   機能するため日次制限なし。pro のみ開発者APIキー保護の乱用ガードを残す。
+const dailyUsage = new Map(); // key -> { date: string, count: number }
+const DAILY_LIMIT_FREE = 3;
+const DAILY_LIMIT_PRO = 30;
 
-function checkDailyLimit(userId) {
+function checkDailyLimit(key, limit) {
   const today = new Date().toISOString().slice(0, 10);
-  const entry = dailyUsage.get(userId);
+  const entry = dailyUsage.get(key);
   if (entry?.date === today) {
-    if (entry.count >= DAILY_LIMIT) return false;
+    if (entry.count >= limit) return false;
     entry.count++;
   } else {
-    dailyUsage.set(userId, { date: today, count: 1 });
+    dailyUsage.set(key, { date: today, count: 1 });
   }
   return true;
 }
@@ -322,6 +325,21 @@ function requireLicense(req, res, next) {
   } catch {
     res.status(401).json({ message: 'ライセンストークンが無効または期限切れです。キーを再アクティベートしてください。' });
   }
+}
+
+// ライセンストークンがあれば req.license を設定し、無ければ無料パスとして素通しする。
+// ローカル backend 由来の JWT(typ 無し)も無料パス扱い。
+function optionalLicense(req, _res, next) {
+  const auth = req.headers['authorization'];
+  if (auth?.startsWith('Bearer ')) {
+    try {
+      const decoded = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
+      if (decoded.typ === 'license' && decoded.lid && decoded.dev) {
+        req.license = { licenseId: decoded.lid, deviceHash: decoded.dev };
+      }
+    } catch { /* 無効・期限切れトークンは無料パス扱い */ }
+  }
+  next();
 }
 
 function signLicenseToken(licenseId, deviceHash) {
@@ -397,9 +415,14 @@ app.get('/license/status', requireLicense, (req, res) => {
 });
 
 // サーバー側デクリメント(通常は /analyze が内部で消費する)
+// amount: 1〜4(省略時1)。P0-2: 手動分析1・自動録画2。
 app.post('/credits/consume', requireLicense, (req, res) => {
+  const amount = req.body?.amount ?? 1;
+  if (!Number.isInteger(amount) || amount < 1 || amount > 4) {
+    return res.status(400).json({ message: '消費クレジット数が不正です' });
+  }
   try {
-    const result = licenseStore.consume(req.license.deviceHash);
+    const result = licenseStore.consume(req.license.deviceHash, amount);
     if (result.error) {
       return res.status(402).json({ message: result.error });
     }
@@ -410,31 +433,56 @@ app.post('/credits/consume', requireLicense, (req, res) => {
   }
 });
 
-app.post('/analyze', requireLicense, async (req, res) => {
-  // 残高チェック(消費は分析成功後)。pro は無制限。
-  let licenseStatus;
-  try {
-    licenseStatus = licenseStore.statusForDevice(req.license.deviceHash);
-  } catch (err) {
-    console.error('[analyze] license status error:', err);
-    return res.status(500).json({ message: 'ライセンス情報の取得に失敗しました' });
-  }
-  if (licenseStatus.tier === 'free') {
-    return res.status(403).json({ message: 'ライセンスキーが必要です。設定画面からキーをアクティベートしてください。' });
-  }
-  if (licenseStatus.tier !== 'pro' && licenseStatus.credits <= 0) {
-    return res.status(402).json({
-      message: 'クラウドAIのクレジットが不足しています。VCREDITキーを入力してクレジットを追加してください。',
-    });
-  }
-
-  if (!checkDailyLimit(`lic:${req.license.licenseId}`)) {
-    return res.status(429).json({
-      message: `1日の分析回数上限（${DAILY_LIMIT}回）に達しました。明日またお試しください。`,
-    });
-  }
-
+app.post('/analyze', optionalLicense, async (req, res) => {
   const { rank, agent, selfAssessment, review, videoAnalysis } = req.body;
+
+  // P0-2: 無料3回/日+有料はクレジット消費(手動1・自動録画2)に一本化
+  let cost = 0; // 分析成功後に消費するクレジット数(無料・pro は 0)
+  let licenseStatus = null;
+
+  if (req.license) {
+    try {
+      licenseStatus = licenseStore.statusForDevice(req.license.deviceHash);
+    } catch (err) {
+      console.error('[analyze] license status error:', err);
+      return res.status(500).json({ message: 'ライセンス情報の取得に失敗しました' });
+    }
+    if (licenseStatus.tier === 'free') {
+      return res.status(403).json({ message: 'ライセンスキーが必要です。設定画面からキーをアクティベートしてください。' });
+    }
+
+    if (licenseStatus.tier === 'pro') {
+      // pro はクレジット消費なし。開発者APIキー保護の乱用ガードのみ。
+      if (!checkDailyLimit(`lic:${req.license.licenseId}`, DAILY_LIMIT_PRO)) {
+        return res.status(429).json({
+          message: `1日の分析回数上限（${DAILY_LIMIT_PRO}回）に達しました。明日またお試しください。`,
+        });
+      }
+    } else {
+      cost = videoAnalysis ? 2 : 1;
+      if (licenseStatus.credits < cost) {
+        return res.status(402).json({
+          message: 'クラウドAIのクレジットが不足しています。VCREDITキーを入力してクレジットを追加してください。',
+        });
+      }
+    }
+  } else {
+    // 無料パス: 端末ハッシュ単位で3回/日。自動録画分析は有料機能。
+    const deviceHash = req.body.deviceHash;
+    if (typeof deviceHash !== 'string' || !/^[0-9a-f]{64}$/.test(deviceHash)) {
+      return res.status(401).json({ message: 'ライセンスのアクティベート、またはアプリからの利用が必要です' });
+    }
+    if (videoAnalysis) {
+      return res.status(403).json({
+        message: '自動録画の分析は有料プランの機能です。ライセンスキーをアクティベートしてください。',
+      });
+    }
+    if (!checkDailyLimit(`free:${deviceHash}`, DAILY_LIMIT_FREE)) {
+      return res.status(429).json({
+        message: `無料プランの1日の分析回数上限（${DAILY_LIMIT_FREE}回）に達しました。アップグレードすると無制限にご利用いただけます。`,
+      });
+    }
+  }
 
   if (!rank || !agent) {
     return res.status(400).json({ message: 'ランクとエージェントは必須です' });
@@ -545,9 +593,9 @@ app.post('/analyze', requireLicense, async (req, res) => {
       throw new Error('AI response failed structural validation');
     }
 
-    // 分析成功後にサーバー台帳から1クレジット消費(pro は消費なし)
-    if (licenseStatus.tier !== 'pro') {
-      const consumed = licenseStore.consume(req.license.deviceHash);
+    // 分析成功後にサーバー台帳から消費(手動1・自動録画2。無料/pro は消費なし)
+    if (cost > 0) {
+      const consumed = licenseStore.consume(req.license.deviceHash, cost);
       parsed.creditsRemaining = consumed.error ? 0 : consumed.credits;
     }
 

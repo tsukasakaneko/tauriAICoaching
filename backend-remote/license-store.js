@@ -218,10 +218,17 @@ const activate = db.transaction((key, deviceHash) => {
 });
 
 /**
- * クレジットを1消費する。期限が近いライセンスから消費(FIFO)。
- * 残高不足なら { error } を返す。
+ * クレジットを amount 消費する(P0-2: 手動分析1・自動録画2)。
+ * 期限が近いライセンスから1ずつ消費(FIFO)し、残高不足なら何も消費せず { error } を返す。
  */
-const consume = db.transaction((deviceHash) => {
+const consume = db.transaction((deviceHash, amount = 1) => {
+  if (!Number.isInteger(amount) || amount < 1) {
+    return { error: '消費クレジット数が不正です' };
+  }
+  if (balanceForDevice(deviceHash) < amount) {
+    return { error: 'クラウドAIのクレジットが不足しています。VCREDITキーを入力してクレジットを追加してください。' };
+  }
+
   const nowMonth = currentMonthString();
   const candidates = db.prepare(`
     SELECT id FROM licenses
@@ -230,15 +237,20 @@ const consume = db.transaction((deviceHash) => {
     ORDER BY (expires_at IS NULL), expires_at ASC, id ASC
   `).all(deviceHash, nowMonth);
 
+  let remaining = amount;
   for (const { id } of candidates) {
-    if (licenseBalance(id) > 0) {
+    let bal = licenseBalance(id);
+    while (remaining > 0 && bal > 0) {
       db.prepare(
         'INSERT INTO credit_ledger (license_id, delta, reason) VALUES (?, -1, ?)'
       ).run(id, 'consume');
-      return { credits: balanceForDevice(deviceHash) };
+      remaining--;
+      bal--;
     }
+    if (remaining === 0) break;
   }
-  return { error: 'クラウドAIのクレジットが不足しています。VCREDITキーを入力してクレジットを追加してください。' };
+  // 事前チェック済みなので remaining は必ず 0
+  return { credits: balanceForDevice(deviceHash) };
 });
 
 module.exports = {

@@ -218,3 +218,9 @@ pub fn get_license_token(app: AppHandle) -> Option<String> {
     store.get(KEY_LICENSE_TOKEN)
         .and_then(|v| v.as_str().map(|s| s.to_string()))
 }
+
+/// 無料ティアの日次制限(P0-2: 3回/日)の識別子としてフロントエンドが使う端末ハッシュ。
+#[tauri::command]
+pub fn get_device_hash() -> Result<String, String> {
+    device_hash()
+}

@@ -52,7 +52,7 @@ function loadSavedField<T>(key: string, fallback: T): T {
 }
 
 // Trigger the upgrade modal for these errors instead of showing inline text
-const LIMIT_ERROR_PATTERNS = ["上限", "クレジットが不足", "有効期限が切れ"];
+const LIMIT_ERROR_PATTERNS = ["上限", "クレジットが不足", "有効期限が切れ", "有料プランの機能"];
 function isLimitError(msg: string) {
   return LIMIT_ERROR_PATTERNS.some((p) => msg.includes(p));
 }
@@ -137,9 +137,11 @@ export default function FormScreen({
         selfAssessment,
         review,
       };
-      const isCloudTierRemote =
-        usageStatus?.tier === "cloud" && aiProvider === "cloud";
-      const result = isCloudTierRemote
+      // P0-2: 無料ティア(3回/日)と cloud ティア+Cloud プロバイダはリモート経由。
+      // pro や自前APIキー/Ollama 利用時はローカル(Tauri コマンド)経由。
+      const useRemote =
+        isFreeTier || (usageStatus?.tier === "cloud" && aiProvider === "cloud");
+      const result = useRemote
         ? await tauriApi.analyzeRemote(formData, videoAnalysis)
         : await tauriApi.analyze(formData, videoAnalysis);
       onReportReady(result);
@@ -189,8 +191,8 @@ export default function FormScreen({
       {isFreeTier && (
         <div className="license-required-banner" onClick={onUpgradeNeeded}>
           <div>
-            <strong>ライセンスキーが必要です</strong>
-            <p>初回アクティベートで +10クレジットボーナス 🎁</p>
+            <strong>無料プラン: 手動分析 1日3回まで</strong>
+            <p>アップグレードでクレジット制+自動録画解析が利用できます 🎁 初回 +10クレジット</p>
           </div>
           <span className="cta-arrow">→</span>
         </div>
@@ -219,6 +221,7 @@ export default function FormScreen({
           <span className="badge-detail">
             KDA {videoAnalysis.kills}/{videoAnalysis.deaths}/{videoAnalysis.assists} ·
             HS率 {Math.round(videoAnalysis.headshotRate * 100)}%
+            {usageStatus?.tier === "cloud" && " · この分析は2クレジット消費"}
           </span>
         </div>
       )}
@@ -281,11 +284,10 @@ export default function FormScreen({
 
         <button
           type="submit"
-          disabled={submitting || isFreeTier}
+          disabled={submitting}
           className="primary-btn analyze-btn"
-          onClick={isFreeTier ? (e) => { e.preventDefault(); onUpgradeNeeded(); } : undefined}
         >
-          {isFreeTier ? "ライセンスキーが必要です" : submitting ? "分析中..." : "分析する"}
+          {submitting ? "分析中..." : isFreeTier ? "分析する（無料: 1日3回まで）" : "分析する"}
         </button>
 
         {submitting && (

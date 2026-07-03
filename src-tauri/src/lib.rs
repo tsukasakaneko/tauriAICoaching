@@ -34,6 +34,7 @@ pub fn run() {
             commands::license::activate_license,
             commands::license::get_license_status,
             commands::license::get_license_token,
+            commands::license::get_device_hash,
             commands::shell::open_external_url,
         ])
         .setup(|app| {

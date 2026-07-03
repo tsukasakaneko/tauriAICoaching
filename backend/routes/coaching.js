@@ -23,9 +23,9 @@ if (process.env.DISABLE_STRANDS !== 'true') {
 }
 
 // Per-user daily rate limit — persisted in the daily_usage table so restarts don't reset counts.
-// Free users: 5/day  Paid users: 20/day
-const DAILY_LIMIT_FREE = 5;
-const DAILY_LIMIT_PAID = 20;
+// P0-2: 課金モデルは「無料3回/日+有料はクレジット消費(backend-remote 側で管理)」に一本化。
+// このローカルルートに有料の日次制限は存在しない(有料分析は backend-remote を経由する)。
+const DAILY_LIMIT_FREE = 3;
 
 const _stmtUpsert = db.prepare(`
   INSERT INTO daily_usage (user_id, date, count) VALUES (?, ?, 1)
@@ -35,11 +35,10 @@ const _stmtGet = db.prepare(
   `SELECT count FROM daily_usage WHERE user_id = ? AND date = ?`
 );
 
-function checkDailyLimit(userId, isPaid) {
+function checkDailyLimit(userId) {
   const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
-  const limit = isPaid ? DAILY_LIMIT_PAID : DAILY_LIMIT_FREE;
   const row = _stmtGet.get(userId, today);
-  if (row && row.count >= limit) return false;
+  if (row && row.count >= DAILY_LIMIT_FREE) return false;
   _stmtUpsert.run(userId, today);
   return true;
 }
@@ -90,10 +89,9 @@ router.delete("/me", requireAuth, (req, res) => {
 
 // POST /analyze
 router.post("/analyze", requireAuth, async (req, res) => {
-  if (!checkDailyLimit(req.user.id, req.user.is_paid === 1)) {
-    const limit = req.user.is_paid === 1 ? DAILY_LIMIT_PAID : DAILY_LIMIT_FREE;
+  if (!checkDailyLimit(req.user.id)) {
     return res.status(429).json({
-      message: `1日の分析回数上限（${limit}回）に達しました。明日またお試しください。`,
+      message: `1日の分析回数上限（${DAILY_LIMIT_FREE}回）に達しました。明日またお試しください。`,
     });
   }
 
