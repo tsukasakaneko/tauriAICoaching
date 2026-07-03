@@ -1,4 +1,4 @@
-# 事業計画書: Valorant AI Coaching アプリ
+# 事業計画書: CoachMate for VALORANT
 **目標: 営業利益 200,000円/月**
 
 ---

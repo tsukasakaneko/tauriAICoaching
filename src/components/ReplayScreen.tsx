@@ -52,7 +52,7 @@ export default function ReplayScreen({ sessionId, onBack }: Props) {
           ← レポートに戻る
         </button>
         <div className="brand-small">
-          <span className="brand-accent">VALORANT</span> AI Coaching
+          <span className="brand-accent">CoachMate</span> for VALORANT
         </div>
       </div>
 

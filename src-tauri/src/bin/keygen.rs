@@ -1,4 +1,4 @@
-/// License key generation tool for VALORANT AI Coaching.
+/// License key generation tool for CoachMate for VALORANT.
 ///
 /// Usage:
 ///

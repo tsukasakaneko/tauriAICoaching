@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "valorant-ai-coaching",
+  "productName": "CoachMate",
   "version": "0.1.0",
   "identifier": "com.coaching.valorant",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "Valorant AI Coaching",
+        "title": "CoachMate for VALORANT",
         "width": 960,
         "height": 720,
         "resizable": true,

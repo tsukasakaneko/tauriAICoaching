@@ -162,7 +162,7 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
       <div className="screen settings-screen">
         <header className="form-header">
           <div className="brand-small">
-            <span className="brand-accent">VALORANT</span> 設定
+            <span className="brand-accent">CoachMate</span> 設定
           </div>
           <button className="logout-btn" onClick={onBack}>
             ← 戻る
@@ -179,7 +179,7 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
     <div className="screen settings-screen">
       <header className="form-header">
         <div className="brand-small">
-          <span className="brand-accent">VALORANT</span> 設定
+          <span className="brand-accent">CoachMate</span> 設定
         </div>
         <button className="logout-btn" onClick={onBack}>
           ← 戻る

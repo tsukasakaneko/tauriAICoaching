@@ -66,7 +66,7 @@ export default function AutoRecordScreen({ onAnalysisDone, onBack }: Props) {
     <div className="screen autorecord-screen">
       <header className="form-header">
         <div className="brand-small">
-          <span className="brand-accent">VALORANT</span> 自動録画・解析
+          <span className="brand-accent">CoachMate</span> 自動録画・解析
         </div>
         <button className="logout-btn" onClick={onBack}>
           ← 戻る

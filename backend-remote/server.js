@@ -126,19 +126,19 @@ async function sendLicenseEmail(to, productLabel, licenseKey) {
     });
   }
 
-  const from = process.env.EMAIL_FROM || 'noreply@valorant-coaching.app';
+  const from = process.env.EMAIL_FROM || 'noreply@coachmate.app';
   await transporter.sendMail({
     from,
     to,
-    subject: '【Valorant AIコーチング】ライセンスキーのご案内',
+    subject: '【CoachMate for VALORANT】ライセンスキーのご案内',
     text: [
-      'この度はValorant AIコーチングをご購入いただきありがとうございます。',
+      'この度は CoachMate for VALORANT をご購入いただきありがとうございます。',
       '',
       `■ ご購入プラン: ${productLabel}`,
       `■ ライセンスキー: ${licenseKey}`,
       '',
       '【アクティベート方法】',
-      '1. Valorant AIコーチングアプリを起動してください。',
+      '1. CoachMate アプリを起動してください。',
       '2. 設定画面 → ライセンス → 「アクティベーションキー」欄にキーを入力してください。',
       '3. 「有効化」ボタンを押すと、クレジットが付与されます。',
       '',
@@ -273,8 +273,8 @@ app.post('/create-checkout-session', async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       line_items: [{ price: PRICE_MAP[product], quantity: 1 }],
       mode: isSubscription ? 'subscription' : 'payment',
-      success_url: `${process.env.APP_SUCCESS_URL || 'https://valorant-coaching.app/purchase-complete'}`,
-      cancel_url: `${process.env.APP_CANCEL_URL || 'https://valorant-coaching.app/purchase-cancel'}`,
+      success_url: `${process.env.APP_SUCCESS_URL || 'https://coachmate.app/purchase-complete'}`,
+      cancel_url: `${process.env.APP_CANCEL_URL || 'https://coachmate.app/purchase-cancel'}`,
       customer_creation: isSubscription ? undefined : 'always',
       metadata: { tier: tierMap[product], product_label: productLabels[product] },
       subscription_data: isSubscription

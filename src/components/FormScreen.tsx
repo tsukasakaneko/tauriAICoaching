@@ -173,7 +173,7 @@ export default function FormScreen({
     <div className="screen form-screen">
       <header className="form-header">
         <div className="brand-small">
-          <span className="brand-accent">VALORANT</span> AI Coaching
+          <span className="brand-accent">CoachMate</span> for VALORANT
         </div>
         <div className="user-info">
           <span className="user-email">{user.email}</span>
