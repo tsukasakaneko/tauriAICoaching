@@ -16,7 +16,7 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
     ollama_model: "llama3.1:8b",
   });
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
-  const [usageStatus, setUsageStatus] = useState<UsageStatus | null>(null);
+  const [, setUsageStatus] = useState<UsageStatus | null>(null);
   const [licenseKey, setLicenseKey] = useState("");
   const [claudeKeyInput, setClaudeKeyInput] = useState("");
   const [loading, setLoading] = useState(true);
@@ -162,7 +162,7 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
       <div className="screen settings-screen">
         <header className="form-header">
           <div className="brand-small">
-            <span className="brand-accent">VALORANT</span> 設定
+            <span className="brand-accent">CoachMate</span> 設定
           </div>
           <button className="logout-btn" onClick={onBack}>
             ← 戻る
@@ -179,7 +179,7 @@ export default function SettingsScreen({ onBack, onAccountDeleted }: Props) {
     <div className="screen settings-screen">
       <header className="form-header">
         <div className="brand-small">
-          <span className="brand-accent">VALORANT</span> 設定
+          <span className="brand-accent">CoachMate</span> 設定
         </div>
         <button className="logout-btn" onClick={onBack}>
           ← 戻る

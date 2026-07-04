@@ -1,4 +1,4 @@
-/// License key generation tool for VALORANT AI Coaching.
+/// License key generation tool for CoachMate for VALORANT.
 ///
 /// Usage:
 ///
@@ -92,15 +92,15 @@ fn create_key(args: &[String]) {
             (0x06u8, "VCLOUD", year, month)
         }
         "credit10" => {
-            let (year, month) = if expiry.is_empty() { one_year_from_now() } else { parse_expiry(&expiry) };
+            let (year, month) = if expiry.is_empty() { six_months_from_now() } else { parse_expiry(&expiry) };
             (0x03u8, "VCREDIT", year, month)
         }
         "credit30" => {
-            let (year, month) = if expiry.is_empty() { one_year_from_now() } else { parse_expiry(&expiry) };
+            let (year, month) = if expiry.is_empty() { six_months_from_now() } else { parse_expiry(&expiry) };
             (0x04u8, "VCREDIT", year, month)
         }
         "credit80" => {
-            let (year, month) = if expiry.is_empty() { one_year_from_now() } else { parse_expiry(&expiry) };
+            let (year, month) = if expiry.is_empty() { six_months_from_now() } else { parse_expiry(&expiry) };
             (0x05u8, "VCREDIT", year, month)
         }
         _ => {
@@ -121,11 +121,12 @@ fn create_key(args: &[String]) {
     println!("{}-{}", prefix, URL_SAFE_NO_PAD.encode(&body));
 }
 
-fn one_year_from_now() -> (u8, u8) {
+// P0-4: クレジット系は6ヶ月失効(資金決済法・前払式支払手段の適用除外要件)
+fn six_months_from_now() -> (u8, u8) {
     use chrono::{Datelike, Local, Months};
-    let next_year = Local::now().checked_add_months(Months::new(12)).expect("date overflow");
-    let year_offset = (next_year.year() - 2020) as u8;
-    let month = next_year.month() as u8;
+    let expiry = Local::now().checked_add_months(Months::new(6)).expect("date overflow");
+    let year_offset = (expiry.year() - 2020) as u8;
+    let month = expiry.month() as u8;
     (year_offset, month)
 }
 

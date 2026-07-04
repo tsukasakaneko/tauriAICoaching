@@ -75,7 +75,7 @@ export interface VideoAnalysisResult {
   dominantZone: string;
   aggressiveness: number;   // 0.0–1.0
   positionVariety: "low" | "medium" | "high";
-  deathsInLateRound: number;
+  deathsInLateRound: number | null;
   longestLoseStreak: number | null;
   totalRounds: number | null;
   wonRounds: number | null;

@@ -31,7 +31,7 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
   return (
     <div className="screen login-screen">
       <div className="login-brand">
-        <span className="brand-accent">VALORANT</span> AI Coaching
+        <span className="brand-accent">CoachMate</span> for VALORANT
       </div>
       <h2>{mode === "login" ? "ログイン" : "新規登録"}</h2>
       <form onSubmit={handleSubmit}>

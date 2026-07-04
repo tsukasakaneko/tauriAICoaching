@@ -207,3 +207,17 @@ pub fn build_user_prompt(payload: &AnalyzePayload) -> String {
     prompt.push_str("\n上記の情報を基に、Valorantのコーチングレポートを生成してください。必ず有効なJSONのみを返してください。");
     prompt
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // P0-3: リモート分析もこのビルダーを使うため、知識ベース注入を保証する
+    #[test]
+    fn system_prompt_injects_knowledge_base() {
+        let prompt = build_system_prompt("Jett", "ゴールド");
+        assert!(prompt.contains("エージェント特性"), "agent knowledge should be injected");
+        assert!(prompt.contains("ゴールド帯へのコーチング指針"), "rank calibration should be injected");
+        assert!(prompt.contains("improvements"), "JSON schema instruction should be present");
+    }
+}

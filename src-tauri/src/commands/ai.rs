@@ -18,6 +18,37 @@ pub struct UsageStatus {
     cloud_credits: i64,
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuiltPrompts {
+    system_prompt: String,
+    user_prompt: String,
+}
+
+const MAX_TOTAL_INPUT: usize = 10_000;
+
+fn check_input_size(payload: &AnalyzePayload) -> Result<(), String> {
+    let total_input_len = payload.rank.len()
+        + payload.agent.len()
+        + payload.review.len()
+        + payload.self_assessment.iter().map(|s| s.len()).sum::<usize>();
+    if total_input_len > MAX_TOTAL_INPUT {
+        return Err("入力データが大きすぎます。各フィールドを短くしてください。".to_string());
+    }
+    Ok(())
+}
+
+/// P0-3: プロンプト構築の一元化。リモート分析でもこのビルダー(知識ベース入り)を
+/// 使うため、フロントエンドが構築済みプロンプトを取得してサーバーへ送る。
+#[tauri::command]
+pub fn build_analysis_prompts(payload: AnalyzePayload) -> Result<BuiltPrompts, String> {
+    check_input_size(&payload)?;
+    Ok(BuiltPrompts {
+        system_prompt: build_system_prompt(&payload.agent, &payload.rank),
+        user_prompt: build_user_prompt(&payload),
+    })
+}
+
 fn load_ai_config(app: &AppHandle) -> AiConfig {
     let Ok(store) = app.store(STORE_PATH) else {
         return AiConfig::default();
@@ -43,14 +74,6 @@ fn get_cloud_credits(app: &AppHandle) -> i64 {
     store.get(KEY_CLOUD_CREDITS)
         .and_then(|v| v.as_i64())
         .unwrap_or(0)
-}
-
-fn decrement_cloud_credits(app: &AppHandle) {
-    if let Ok(store) = app.store(STORE_PATH) {
-        let credits = (get_cloud_credits(app) - 1).max(0);
-        let _ = store.set(KEY_CLOUD_CREDITS, serde_json::json!(credits));
-        let _ = store.save();
-    }
 }
 
 #[tauri::command]
@@ -87,6 +110,8 @@ pub async fn ai_analyze(
                 }
             }
 
+            // 事前ガード(キャッシュ値)。残高の正はサーバー台帳で、
+            // クラウド分析はリモート /analyze がサーバー側で消費・拒否する。
             if config.provider == AiProviderType::Cloud {
                 if get_cloud_credits(&app) <= 0 {
                     return Err(
@@ -99,25 +124,13 @@ pub async fn ai_analyze(
         _ => {} // "pro": unlimited
     }
 
-    const MAX_TOTAL_INPUT: usize = 10_000;
-    let total_input_len = payload.rank.len()
-        + payload.agent.len()
-        + payload.review.len()
-        + payload.self_assessment.iter().map(|s| s.len()).sum::<usize>();
-    if total_input_len > MAX_TOTAL_INPUT {
-        return Err("入力データが大きすぎます。各フィールドを短くしてください。".to_string());
-    }
+    check_input_size(&payload)?;
 
     let system_prompt = build_system_prompt(&payload.agent, &payload.rank);
     let user_prompt = build_user_prompt(&payload);
 
-    let result = crate::ai_provider::call_ai(&http.0, &config, &system_prompt, &user_prompt).await?;
-
-    if tier == "cloud" && config.provider == AiProviderType::Cloud {
-        decrement_cloud_credits(&app);
-    }
-
-    Ok(result)
+    // クレジット消費はサーバー台帳側で行う(P0-1)。ローカルでのデクリメントは廃止。
+    crate::ai_provider::call_ai(&http.0, &config, &system_prompt, &user_prompt).await
 }
 
 #[tauri::command]
@@ -170,9 +183,14 @@ pub async fn test_ollama(
 }
 
 #[tauri::command]
-pub fn get_usage_status(app: AppHandle) -> UsageStatus {
-    UsageStatus {
+pub async fn get_usage_status(
+    app: AppHandle,
+    http: State<'_, HttpClient>,
+) -> Result<UsageStatus, String> {
+    // サーバー台帳から最新残高を取得してキャッシュを更新(オフライン時はキャッシュ値)
+    let _ = crate::commands::license::refresh_status_from_server(&app, &http.0).await;
+    Ok(UsageStatus {
         tier: get_license_tier(&app),
         cloud_credits: get_cloud_credits(&app),
-    }
+    })
 }

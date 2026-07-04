@@ -1,7 +1,7 @@
 [package]
 name = "valorant-ai-coaching"
 version = "0.1.0"
-description = "Valorant AI Coaching Desktop App"
+description = "CoachMate for VALORANT — AI coaching desktop app"
 authors = []
 edition = "2021"
 
@@ -27,6 +27,8 @@ ed25519-dalek = { version = "2", features = ["rand_core"] }
 base64 = "0.22"
 rand = "0.8"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+machine-uid = "0.5"
+sha2 = "0.10"
 toml = { version = "0.8", default-features = false, features = ["parse"] }
 
 [[bin]]

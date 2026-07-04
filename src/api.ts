@@ -33,7 +33,8 @@ async function request<T>(path: string, options: RequestInit = {}, baseUrl = BAS
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
-  if (token) {
+  // 呼び出し側が明示した Authorization(例: ライセンストークン)を優先する
+  if (token && !headers["Authorization"]) {
     headers["Authorization"] = `Bearer ${token}`;
   }
   const res = await fetch(`${baseUrl}${path}`, { ...options, headers });
@@ -101,21 +102,39 @@ export const tauriApi = {
       },
     }),
 
-  // cloud tier + Cloud provider: routes through the remote server (developer's API key)
-  analyzeRemote: (
+  // free / cloud tier: routes through the remote server (developer's API key)
+  // P0-1: 有料はライセンストークン認証+サーバー側クレジット消費。
+  // P0-2: 無料はトークン無し+deviceHash で 3回/日(サーバー側 enforce)。
+  // P0-3: プロンプトは Tauri 側 prompt_builder.rs(知識ベース入り)で構築して送る。
+  analyzeRemote: async (
     formData: CoachingFormData,
     videoAnalysis: VideoAnalysisResult | null
-  ): Promise<CoachingReport> =>
-    request<CoachingReport>("/analyze", {
+  ): Promise<CoachingReport> => {
+    const prompts = await invoke<{ systemPrompt: string; userPrompt: string }>(
+      "build_analysis_prompts",
+      {
+        payload: {
+          rank: formData.rank,
+          agent: formData.agent,
+          selfAssessment: formData.selfAssessment,
+          review: formData.review,
+          videoAnalysis: videoAnalysis ?? null,
+        },
+      }
+    );
+    const licenseToken = await invoke<string | null>("get_license_token");
+    const deviceHash = licenseToken ? null : await invoke<string>("get_device_hash");
+    return request<CoachingReport>("/analyze", {
       method: "POST",
+      headers: licenseToken ? { Authorization: `Bearer ${licenseToken}` } : undefined,
       body: JSON.stringify({
-        rank: formData.rank,
-        agent: formData.agent,
-        selfAssessment: formData.selfAssessment,
-        review: formData.review,
-        videoAnalysis: videoAnalysis ?? null,
+        systemPrompt: prompts.systemPrompt,
+        userPrompt: prompts.userPrompt,
+        videoAnalysis: videoAnalysis !== null,
+        ...(deviceHash ? { deviceHash } : {}),
       }),
-    }, REMOTE_API_URL),
+    }, REMOTE_API_URL);
+  },
 
   getAiConfig: (): Promise<AiConfig> => invoke<AiConfig>("get_ai_config"),
 

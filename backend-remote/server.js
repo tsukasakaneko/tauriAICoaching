@@ -25,6 +25,9 @@ if (!process.env.ANTHROPIC_API_KEY) {
 const app = express();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// P0-1: サーバー側クレジット台帳(SQLite)
+const licenseStore = require('./license-store');
+
 // ── Stripe ────────────────────────────────────────────────────────────────────
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
@@ -91,9 +94,15 @@ function expiryForTier(tier) {
     const d = new Date(now.getFullYear() + 1, now.getMonth(), 1);
     return { year: d.getFullYear() - 2020, month: d.getMonth() + 1 };
   }
-  // Credits: 1 year from now
-  const d = new Date(now.getFullYear() + 1, now.getMonth(), 1);
+  // P0-4: クレジット系は購入から6ヶ月で失効。
+  // 資金決済法の前払式支払手段は有効期間6ヶ月以内なら適用除外となるため。
+  const d = new Date(now.getFullYear(), now.getMonth() + 6, 1);
   return { year: d.getFullYear() - 2020, month: d.getMonth() + 1 };
+}
+
+/** expiryForTier の {year(2020起点), month} を台帳用の "YYYY-MM" に変換する */
+function expiryString(exp) {
+  return `${2020 + exp.year}-${String(exp.month).padStart(2, '0')}`;
 }
 
 async function sendLicenseEmail(to, productLabel, licenseKey) {
@@ -117,19 +126,19 @@ async function sendLicenseEmail(to, productLabel, licenseKey) {
     });
   }
 
-  const from = process.env.EMAIL_FROM || 'noreply@valorant-coaching.app';
+  const from = process.env.EMAIL_FROM || 'noreply@coachmate.app';
   await transporter.sendMail({
     from,
     to,
-    subject: '【Valorant AIコーチング】ライセンスキーのご案内',
+    subject: '【CoachMate for VALORANT】ライセンスキーのご案内',
     text: [
-      'この度はValorant AIコーチングをご購入いただきありがとうございます。',
+      'この度は CoachMate for VALORANT をご購入いただきありがとうございます。',
       '',
       `■ ご購入プラン: ${productLabel}`,
       `■ ライセンスキー: ${licenseKey}`,
       '',
       '【アクティベート方法】',
-      '1. Valorant AIコーチングアプリを起動してください。',
+      '1. CoachMate アプリを起動してください。',
       '2. 設定画面 → ライセンス → 「アクティベーションキー」欄にキーを入力してください。',
       '3. 「有効化」ボタンを押すと、クレジットが付与されます。',
       '',
@@ -183,6 +192,10 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
       const cfg = TIER_CONFIG[tier];
       const exp = expiryForTier(tier);
       const key = issueLicenseKey(cfg.tierCode, cfg.prefix, exp.year, exp.month);
+      // P0-1: メール送信前に台帳へ登録(失敗時は 500 → Stripe リトライ)
+      licenseStore.registerIssuedKey({
+        key, email, tier, credits: cfg.credits, expiresAt: expiryString(exp),
+      });
       await sendLicenseEmail(email, productLabel, key);
       console.log(`[stripe webhook] issued ${tier} key for ${email}`);
 
@@ -216,6 +229,9 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
       const cfg = TIER_CONFIG[tier];
       const exp = expiryForTier(tier);
       const key = issueLicenseKey(cfg.tierCode, cfg.prefix, exp.year, exp.month);
+      licenseStore.registerIssuedKey({
+        key, email, tier, credits: cfg.credits, expiresAt: expiryString(exp),
+      });
       await sendLicenseEmail(email, productLabel, key);
       console.log(`[stripe webhook] renewal: issued ${tier} key for ${email}`);
     }
@@ -257,8 +273,8 @@ app.post('/create-checkout-session', async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       line_items: [{ price: PRICE_MAP[product], quantity: 1 }],
       mode: isSubscription ? 'subscription' : 'payment',
-      success_url: `${process.env.APP_SUCCESS_URL || 'https://valorant-coaching.app/purchase-complete'}`,
-      cancel_url: `${process.env.APP_CANCEL_URL || 'https://valorant-coaching.app/purchase-cancel'}`,
+      success_url: `${process.env.APP_SUCCESS_URL || 'https://coachmate.app/purchase-complete'}`,
+      cancel_url: `${process.env.APP_CANCEL_URL || 'https://coachmate.app/purchase-cancel'}`,
       customer_creation: isSubscription ? undefined : 'always',
       metadata: { tier: tierMap[product], product_label: productLabels[product] },
       subscription_data: isSubscription
@@ -273,131 +289,219 @@ app.post('/create-checkout-session', async (req, res) => {
 });
 
 // ── Rate limiting (in-memory, resets on restart) ──────────────────────────────
-// Per-user daily limit prevents runaway usage on the free Anthropic key.
-const dailyUsage = new Map(); // userId -> { date: string, count: number }
-const DAILY_LIMIT = 30;
+// P0-2: 課金モデルの一本化。
+//   無料: 3回/日(端末ハッシュ単位)。有料(cloud系)はクレジットが上限として
+//   機能するため日次制限なし。pro のみ開発者APIキー保護の乱用ガードを残す。
+const dailyUsage = new Map(); // key -> { date: string, count: number }
+const DAILY_LIMIT_FREE = 3;
+const DAILY_LIMIT_PRO = 30;
 
-function checkDailyLimit(userId) {
+function checkDailyLimit(key, limit) {
   const today = new Date().toISOString().slice(0, 10);
-  const entry = dailyUsage.get(userId);
+  const entry = dailyUsage.get(key);
   if (entry?.date === today) {
-    if (entry.count >= DAILY_LIMIT) return false;
+    if (entry.count >= limit) return false;
     entry.count++;
   } else {
-    dailyUsage.set(userId, { date: today, count: 1 });
+    dailyUsage.set(key, { date: today, count: 1 });
   }
   return true;
 }
 
-// ── Auth middleware ───────────────────────────────────────────────────────────
-// Validates the JWT issued by the local backend. No DB lookup needed here —
-// the signature check is sufficient since we share the same JWT_SECRET.
-function requireAuth(req, res, next) {
+// ── License auth middleware ───────────────────────────────────────────────────
+// P0-1: /license/activate で発行したライセンストークンを検証する。
+// 旧実装のローカル backend JWT は同梱アプリから JWT_SECRET が抽出できるため信用しない。
+function requireLicense(req, res, next) {
   const auth = req.headers['authorization'];
   if (!auth?.startsWith('Bearer ')) {
-    return res.status(401).json({ message: '認証が必要です' });
+    return res.status(401).json({ message: 'ライセンスのアクティベートが必要です' });
   }
   try {
     const decoded = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
-    req.userId = String(decoded.id);
+    if (decoded.typ !== 'license' || !decoded.lid || !decoded.dev) {
+      return res.status(401).json({ message: 'ライセンストークンが無効です' });
+    }
+    req.license = { licenseId: decoded.lid, deviceHash: decoded.dev };
     next();
   } catch {
-    res.status(401).json({ message: 'トークンが無効または期限切れです' });
+    res.status(401).json({ message: 'ライセンストークンが無効または期限切れです。キーを再アクティベートしてください。' });
   }
+}
+
+// ライセンストークンがあれば req.license を設定し、無ければ無料パスとして素通しする。
+// ローカル backend 由来の JWT(typ 無し)も無料パス扱い。
+function optionalLicense(req, _res, next) {
+  const auth = req.headers['authorization'];
+  if (auth?.startsWith('Bearer ')) {
+    try {
+      const decoded = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
+      if (decoded.typ === 'license' && decoded.lid && decoded.dev) {
+        req.license = { licenseId: decoded.lid, deviceHash: decoded.dev };
+      }
+    } catch { /* 無効・期限切れトークンは無料パス扱い */ }
+  }
+  next();
+}
+
+function signLicenseToken(licenseId, deviceHash) {
+  return jwt.sign(
+    { typ: 'license', lid: licenseId, dev: deviceHash },
+    process.env.JWT_SECRET,
+    { expiresIn: '30d' },
+  );
+}
+
+// ── License activation rate limit (in-memory, per IP) ────────────────────────
+const activateAttempts = new Map(); // ip -> { windowStart: number, count: number }
+const ACTIVATE_WINDOW_MS = 60_000;
+const ACTIVATE_MAX_PER_WINDOW = 10;
+
+function checkActivateRateLimit(ip) {
+  const now = Date.now();
+  const entry = activateAttempts.get(ip);
+  if (!entry || now - entry.windowStart > ACTIVATE_WINDOW_MS) {
+    activateAttempts.set(ip, { windowStart: now, count: 1 });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= ACTIVATE_MAX_PER_WINDOW;
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
-app.post('/analyze', requireAuth, async (req, res) => {
-  if (!checkDailyLimit(req.userId)) {
-    return res.status(429).json({
-      message: `1日の分析回数上限（${DAILY_LIMIT}回）に達しました。明日またお試しください。`,
+// ── License endpoints (P0-1) ──────────────────────────────────────────────────
+
+// キー検証 + 端末バインド + クレジット付与。成功時にライセンストークンを発行する。
+app.post('/license/activate', (req, res) => {
+  if (!checkActivateRateLimit(req.ip)) {
+    return res.status(429).json({ message: '試行回数が多すぎます。しばらく待ってから再度お試しください。' });
+  }
+
+  const { key, deviceHash } = req.body;
+  if (typeof key !== 'string' || key.length > 200 ||
+      typeof deviceHash !== 'string' || !/^[0-9a-f]{64}$/.test(deviceHash)) {
+    return res.status(400).json({ message: 'リクエストが不正です' });
+  }
+
+  try {
+    const result = licenseStore.activate(key, deviceHash);
+    if (result.error) {
+      return res.status(result.statusCode || 400).json({ message: result.error });
+    }
+
+    const status = licenseStore.statusForDevice(deviceHash);
+    res.json({
+      licenseToken: signLicenseToken(result.license.id, deviceHash),
+      tier: status.tier,
+      credits: status.credits,
+      expiresAt: status.expiresAt,
+      firstPaymentBonus: result.firstPaymentBonus,
     });
+  } catch (err) {
+    console.error('[license/activate] error:', err);
+    res.status(500).json({ message: 'アクティベートに失敗しました。もう一度お試しください。' });
   }
+});
 
-  const { rank, agent, selfAssessment, review, videoAnalysis } = req.body;
-
-  if (!rank || !agent) {
-    return res.status(400).json({ message: 'ランクとエージェントは必須です' });
+// 表示用ステータス(残高はサーバー台帳が正)
+app.get('/license/status', requireLicense, (req, res) => {
+  try {
+    res.json(licenseStore.statusForDevice(req.license.deviceHash));
+  } catch (err) {
+    console.error('[license/status] error:', err);
+    res.status(500).json({ message: 'ステータスの取得に失敗しました' });
   }
-  if (typeof agent !== 'string' || agent.length > 60) {
-    return res.status(400).json({ message: 'エージェント名は60文字以内です' });
-  }
-  if (review && (typeof review !== 'string' || review.length > 2000)) {
-    return res.status(400).json({ message: '振り返りは2000文字以内です' });
-  }
-  if (selfAssessment && (!Array.isArray(selfAssessment) || selfAssessment.length > 10 ||
-      selfAssessment.some((s) => typeof s !== 'string' || s.length > 100))) {
-    return res.status(400).json({ message: '自己評価の値が不正です' });
-  }
+});
 
-  const assessmentText = Array.isArray(selfAssessment) && selfAssessment.length > 0
-    ? selfAssessment.join('、')
-    : '特になし';
-
-  // Build user prompt (mirrors prompt_builder.rs)
-  let userPrompt = `プレイヤー情報:\n- ランク: ${rank}\n- エージェント: ${agent}\n- 自己評価の課題: ${assessmentText}\n- プレイ振り返り: ${review || '特になし'}\n`;
-
-  if (videoAnalysis && typeof videoAnalysis === 'object') {
-    const va = videoAnalysis;
-    userPrompt += '\n【自動解析データ (YOLOv8)】\n';
-    if (va.kills != null && va.deaths != null && va.assists != null)
-      userPrompt += `- KDA: ${va.kills}/${va.deaths}/${va.assists}\n`;
-    if (va.headshotRate != null)
-      userPrompt += `- ヘッドショット率: ${Math.round(va.headshotRate * 100)}%\n`;
-    if (va.damageDealt != null)
-      userPrompt += `- ダメージ合計: ${va.damageDealt}\n`;
-    if (va.abilityKills != null)
-      userPrompt += `- アビリティキル: ${va.abilityKills}回\n`;
-    if (va.dominantZone != null)
-      userPrompt += `- 主な活動エリア: ${va.dominantZone}\n`;
-    if (va.aggressiveness != null) {
-      const label = va.aggressiveness > 0.7 ? '積極的' : va.aggressiveness > 0.4 ? 'バランス型' : '慎重';
-      userPrompt += `- ポジショニング傾向: ${label} (スコア: ${va.aggressiveness.toFixed(2)})\n`;
+// サーバー側デクリメント(通常は /analyze が内部で消費する)
+// amount: 1〜4(省略時1)。P0-2: 手動分析1・自動録画2。
+app.post('/credits/consume', requireLicense, (req, res) => {
+  const amount = req.body?.amount ?? 1;
+  if (!Number.isInteger(amount) || amount < 1 || amount > 4) {
+    return res.status(400).json({ message: '消費クレジット数が不正です' });
+  }
+  try {
+    const result = licenseStore.consume(req.license.deviceHash, amount);
+    if (result.error) {
+      return res.status(402).json({ message: result.error });
     }
-    if (va.deathsInLateRound != null)
-      userPrompt += `- ラウンド後半デス数: ${va.deathsInLateRound}回\n`;
-    if (va.longestLoseStreak != null)
-      userPrompt += `- 最長連敗ストリーク: ${va.longestLoseStreak}ラウンド\n`;
-    if (va.totalRounds != null && va.wonRounds != null)
-      userPrompt += `- ラウンド勝敗: ${va.wonRounds}/${va.totalRounds}\n`;
-    userPrompt += '\n上記の客観的データと、プレイヤーの自己評価を合わせて分析してください。\n';
+    res.json({ credits: result.credits });
+  } catch (err) {
+    console.error('[credits/consume] error:', err);
+    res.status(500).json({ message: 'クレジットの消費に失敗しました' });
+  }
+});
+
+app.post('/analyze', optionalLicense, async (req, res) => {
+  // P0-3: systemPrompt/userPrompt はクライアント(prompt_builder.rs)構築。
+  // videoAnalysis はコスト判定用フラグ(手動1・自動録画2)。
+  const { systemPrompt, userPrompt, videoAnalysis } = req.body;
+
+  // P0-3: プロンプト構築は Tauri 側 prompt_builder.rs に一元化。
+  // クライアントは知識ベース入りの構築済みプロンプトを送ってくる。
+  // 乱用は無料3回/日・クレジット消費・pro 30回/日・max_tokens・
+  // レスポンスの CoachingReport 構造検証で抑止する。
+  // 検証は日次カウント・クレジットに触れる前に行う。
+  const MAX_SYSTEM_PROMPT_LEN = 8_000;
+  const MAX_USER_PROMPT_LEN = 12_000;
+  if (typeof systemPrompt !== 'string' || systemPrompt.length === 0 ||
+      systemPrompt.length > MAX_SYSTEM_PROMPT_LEN) {
+    return res.status(400).json({ message: `systemPrompt は${MAX_SYSTEM_PROMPT_LEN}文字以内で必須です` });
+  }
+  if (typeof userPrompt !== 'string' || userPrompt.length === 0 ||
+      userPrompt.length > MAX_USER_PROMPT_LEN) {
+    return res.status(400).json({ message: `userPrompt は${MAX_USER_PROMPT_LEN}文字以内で必須です` });
   }
 
-  userPrompt += '\n上記の情報を基に、Valorantのコーチングレポートを生成してください。必ず有効なJSONのみを返してください。';
+  // P0-2: 無料3回/日+有料はクレジット消費(手動1・自動録画2)に一本化
+  let cost = 0; // 分析成功後に消費するクレジット数(無料・pro は 0)
+  let licenseStatus = null;
 
-  const systemPrompt = `あなたはValorantのプロコーチです。
-全ランク帯（アイアン〜レディアント）のプレイヤーに対して、そのランクに合った具体的で実行可能な改善アドバイスを提供してください。
-抽象的な表現は禁止。必ず"行動レベル"に落としてください。
-データがある場合は必ず数値を引用して根拠を示してください（例: 「HS率が23%と低いため…」）。
-
-以下のJSON形式のみで返答してください：
-{
-  "improvements": [
-    {
-      "title": "改善点のタイトル",
-      "description": "詳細な説明（数値データがあれば引用）",
-      "cause": "問題の根本原因",
-      "actions": ["具体的なアクション1", "アクション2", "アクション3"]
+  if (req.license) {
+    try {
+      licenseStatus = licenseStore.statusForDevice(req.license.deviceHash);
+    } catch (err) {
+      console.error('[analyze] license status error:', err);
+      return res.status(500).json({ message: 'ライセンス情報の取得に失敗しました' });
     }
-  ],
-  "training_plan": [
-    "Day1: 具体的なトレーニング内容",
-    "Day2: ...",
-    "Day3: ...",
-    "Day4: ...",
-    "Day5: ...",
-    "Day6: ...",
-    "Day7: ..."
-  ],
-  "summary": {
-    "strengths": "プレイヤーの強みの説明",
-    "weaknesses": "主な弱点の説明",
-    "focus": "最優先で取り組むべき課題"
+    if (licenseStatus.tier === 'free') {
+      return res.status(403).json({ message: 'ライセンスキーが必要です。設定画面からキーをアクティベートしてください。' });
+    }
+
+    if (licenseStatus.tier === 'pro') {
+      // pro はクレジット消費なし。開発者APIキー保護の乱用ガードのみ。
+      if (!checkDailyLimit(`lic:${req.license.licenseId}`, DAILY_LIMIT_PRO)) {
+        return res.status(429).json({
+          message: `1日の分析回数上限（${DAILY_LIMIT_PRO}回）に達しました。明日またお試しください。`,
+        });
+      }
+    } else {
+      cost = videoAnalysis ? 2 : 1;
+      if (licenseStatus.credits < cost) {
+        return res.status(402).json({
+          message: 'クラウドAIのクレジットが不足しています。VCREDITキーを入力してクレジットを追加してください。',
+        });
+      }
+    }
+  } else {
+    // 無料パス: 端末ハッシュ単位で3回/日。自動録画分析は有料機能。
+    const deviceHash = req.body.deviceHash;
+    if (typeof deviceHash !== 'string' || !/^[0-9a-f]{64}$/.test(deviceHash)) {
+      return res.status(401).json({ message: 'ライセンスのアクティベート、またはアプリからの利用が必要です' });
+    }
+    if (videoAnalysis) {
+      return res.status(403).json({
+        message: '自動録画の分析は有料プランの機能です。ライセンスキーをアクティベートしてください。',
+      });
+    }
+    if (!checkDailyLimit(`free:${deviceHash}`, DAILY_LIMIT_FREE)) {
+      return res.status(429).json({
+        message: `無料プランの1日の分析回数上限（${DAILY_LIMIT_FREE}回）に達しました。アップグレードすると無制限にご利用いただけます。`,
+      });
+    }
   }
-}`;
 
   try {
     const response = await anthropic.messages.create({
@@ -426,6 +530,12 @@ app.post('/analyze', requireAuth, async (req, res) => {
       typeof parsed.summary.weaknesses !== 'string' || typeof parsed.summary.focus !== 'string'
     ) {
       throw new Error('AI response failed structural validation');
+    }
+
+    // 分析成功後にサーバー台帳から消費(手動1・自動録画2。無料/pro は消費なし)
+    if (cost > 0) {
+      const consumed = licenseStore.consume(req.license.deviceHash, cost);
+      parsed.creditsRemaining = consumed.error ? 0 : consumed.credits;
     }
 
     res.json(parsed);

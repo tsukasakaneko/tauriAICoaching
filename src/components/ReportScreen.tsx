@@ -26,7 +26,7 @@ export default function ReportScreen({ report, sessionId, onBack, onUpgrade, onR
           ← フォームに戻る
         </button>
         <div className="brand-small">
-          <span className="brand-accent">VALORANT</span> AI Coaching
+          <span className="brand-accent">CoachMate</span> for VALORANT
         </div>
         {sessionId !== null && (
           <button className="secondary-btn" onClick={onReplay}>

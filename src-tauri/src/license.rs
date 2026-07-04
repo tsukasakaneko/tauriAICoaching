@@ -32,6 +32,11 @@ pub struct LicenseInfo {
 //   [2] expiry_month 1–12      (0xFF = no expiry)
 //   [3] nonce (random byte for uniqueness)
 //
+// 期限の長さは発行側(backend-remote / keygen)にのみ存在し、ここでは payload の
+// 年月と現在を比較するだけ。クレジット系(VCREDIT)は発行時+6ヶ月で発行される
+// (P0-4: 資金決済法・前払式支払手段の適用除外要件)。既発行の1年キーも
+// payload どおり有効なまま互換動作する。
+//
 // Total decoded: 68 bytes (4 payload + 64 Ed25519 signature)
 // Prefixes: VCOACH (0x01), VCLOUD (0x02), VCREDIT (0x03/0x04)
 //
