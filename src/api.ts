@@ -172,6 +172,13 @@ export const tauriApi = {
 
   getLicenseStatus: (): Promise<LicenseStatus> => invoke<LicenseStatus>("get_license_status"),
 
+  // P1-11: レポート画像を Downloads に保存し、保存先パスを返す
+  saveReportImage: (base64Png: string): Promise<string> =>
+    invoke<string>("save_report_image", { base64Png }),
+
+  openExternalUrl: (url: string): Promise<void> =>
+    invoke<void>("open_external_url", { url }),
+
   openCheckout: async (product: string): Promise<void> => {
     const { url } = await request<{ url: string }>(
       "/create-checkout-session",
