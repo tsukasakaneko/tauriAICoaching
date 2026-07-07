@@ -1,4 +1,4 @@
-export type Screen = "login" | "form" | "report" | "autorecord" | "settings" | "replay";
+export type Screen = "login" | "form" | "report" | "autorecord" | "settings" | "replay" | "history";
 
 export interface User {
   id: number;
@@ -142,5 +142,40 @@ export interface MatchMeta {
 export interface ReplayData {
   events: MatchEvent[];
   meta: MatchMeta | null;
+}
+
+// ─── Analysis history types (P1-8) ────────────────────────────────────────────
+
+export type SessionStatus = "recording" | "analyzing" | "done" | "error" | (string & {});
+
+export interface SessionHistoryItem {
+  id: number;
+  startedAt: string;
+  matchStartedAt: string | null;
+  matchEndedAt: string | null;
+  status: SessionStatus;
+  mapName: MapName | null;
+  agent: string | null;
+  kda: { kills: number; deaths: number; assists: number } | null;
+  wonRounds: number | null;
+  totalRounds: number | null;
+  reportId: number | null;
+}
+
+export interface StandaloneReportItem {
+  id: number;
+  createdAt: string;
+}
+
+export interface HistoryResponse {
+  sessions: SessionHistoryItem[];
+  standaloneReports: StandaloneReportItem[];
+}
+
+export interface SavedReport {
+  id: number;
+  sessionId: number | null;
+  createdAt: string;
+  report: CoachingReport;
 }
 

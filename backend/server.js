@@ -21,6 +21,7 @@ if (process.env.JWT_SECRET === 'your-super-secret-jwt-key-change-this-in-product
 const authRoutes = require("./routes/auth");
 const { router: coachingRouter } = require("./routes/coaching");
 const { router: autoRecordRouter } = require("./routes/autorecord");
+const { router: historyRouter } = require("./routes/history");
 const { sweepOrphanFrames } = require("./services/videoAnalyzer");
 
 // Reclaim disk from frame-extraction temp dirs left by crashed runs.
@@ -62,6 +63,7 @@ app.get("/health", (_req, res) => res.json({ status: "ok" }));
 app.use("/auth", authRoutes);
 app.use("/", coachingRouter);
 app.use("/", autoRecordRouter);
+app.use("/", historyRouter);
 
 app.use((_req, res) => res.status(404).json({ message: "Not found" }));
 

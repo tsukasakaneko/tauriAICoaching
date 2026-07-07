@@ -40,8 +40,9 @@ router.delete("/me", requireAuth, (req, res) => {
   const userId = req.user.id;
   // Use a transaction so all deletes succeed or all roll back atomically
   const deleteAll = db.transaction(() => {
-    db.prepare("DELETE FROM daily_usage    WHERE user_id = ?").run(userId);
-    db.prepare("DELETE FROM match_sessions WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM daily_usage      WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM coaching_reports WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM match_sessions   WHERE user_id = ?").run(userId);
     db.prepare("DELETE FROM users          WHERE id      = ?").run(userId);
   });
   try {

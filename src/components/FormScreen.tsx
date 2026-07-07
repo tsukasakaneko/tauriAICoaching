@@ -64,6 +64,7 @@ interface Props {
   onLogout: () => void;
   onAutoRecord: () => void;
   onSettings: () => void;
+  onHistory: () => void;
   onUpgradeNeeded: () => void;
 }
 
@@ -74,6 +75,7 @@ export default function FormScreen({
   onLogout,
   onAutoRecord,
   onSettings,
+  onHistory,
   onUpgradeNeeded,
 }: Props) {
   const [rank, setRank] = useState<Rank>(() => loadSavedField<Rank>("rank", "シルバー"));
@@ -177,6 +179,9 @@ export default function FormScreen({
         </div>
         <div className="user-info">
           <span className="user-email">{user.email}</span>
+          <button className="icon-btn" onClick={onHistory} title="分析履歴">
+            🕒
+          </button>
           <button className="icon-btn" onClick={onSettings} title="設定">
             ⚙
           </button>

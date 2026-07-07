@@ -10,6 +10,8 @@ import type {
   ActivationResult,
   UsageStatus,
   ReplayData,
+  HistoryResponse,
+  SavedReport,
 } from "./types";
 
 const BASE_URL = "http://127.0.0.1:3001";
@@ -77,6 +79,17 @@ export const api = {
 
   getSessionEvents: (sessionId: number) =>
     request<ReplayData>(`/sessions/${sessionId}/events`),
+
+  // Analysis history endpoints
+  getHistory: () => request<HistoryResponse>("/history"),
+
+  saveReport: (sessionId: number | null, report: CoachingReport) =>
+    request<{ id: number }>("/reports", {
+      method: "POST",
+      body: JSON.stringify({ sessionId, report }),
+    }),
+
+  getReport: (id: number) => request<SavedReport>(`/reports/${id}`),
 
   // SSE factory — EventSource needs the token as a query param
   createRecordingEventSource: (): EventSource => {

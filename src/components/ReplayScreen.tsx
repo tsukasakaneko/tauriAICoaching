@@ -4,6 +4,7 @@ import { useMatchEvents } from "../hooks/useMatchEvents";
 interface Props {
   sessionId: number;
   onBack: () => void;
+  backLabel?: string;
 }
 
 const EVENT_LABELS: Record<string, string> = {
@@ -38,7 +39,7 @@ function EventRow({ event }: { event: MatchEvent }) {
   );
 }
 
-export default function ReplayScreen({ sessionId, onBack }: Props) {
+export default function ReplayScreen({ sessionId, onBack, backLabel = "← レポートに戻る" }: Props) {
   const { data, loading, error } = useMatchEvents(sessionId);
 
   const kills = data?.events.filter((e) => e.event_type === "kill").length ?? 0;
@@ -49,7 +50,7 @@ export default function ReplayScreen({ sessionId, onBack }: Props) {
     <div className="screen replay-screen">
       <div className="report-nav">
         <button className="back-btn" onClick={onBack}>
-          ← レポートに戻る
+          {backLabel}
         </button>
         <div className="brand-small">
           <span className="brand-accent">CoachMate</span> for VALORANT
