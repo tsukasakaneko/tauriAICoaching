@@ -96,6 +96,10 @@ export interface VideoAnalysisResult {
   longestLoseStreak: number | null;
   totalRounds: number | null;
   wonRounds: number | null;
+  // P1-10: Riot ローカル API 由来(旧データには存在しないため optional)
+  mapName?: string | null;
+  agent?: string | null;
+  statsSource?: "riot" | "video";
 }
 
 // ─── AI / License types ──────────────────────────────────────────────────────

@@ -4,9 +4,11 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const db = require('../db');
-const screenMonitor = require('../services/screenMonitor');
+const matchMonitor = require('../services/matchMonitor');
 const screenRecorder = require('../services/screenRecorder');
 const { analyzeVideo } = require('../services/videoAnalyzer');
+const { fetchLatestMatchStats } = require('../services/riotMatchData');
+const { mergeStats } = require('../services/statsMerge');
 const eventLog = require('../services/eventLog');
 
 const router = express.Router();
@@ -57,16 +59,20 @@ function broadcast(userId, eventName, data) {
 // Active recording session per user (in-memory)
 const activeSessions = new Map(); // userId → { sessionId, recordingPath }
 
+// P1-10: 直近の試合開始時刻(Riot match-details の誤帰属防止に使う)
+let lastMatchStartedAtMillis = null;
+
 // ─── Wire up monitor events ───────────────────────────────────────────────────
 
-screenMonitor.on('stateChanged', (newState, _prev) => {
+matchMonitor.on('stateChanged', (newState, _prev) => {
   // Broadcast to all connected SSE clients (global state — one monitor for all)
   for (const [userId] of sseClients) {
     broadcast(userId, 'state_change', { state: newState, timestamp: new Date().toISOString() });
   }
 });
 
-screenMonitor.on('matchStarted', () => {
+matchMonitor.on('matchStarted', () => {
+  lastMatchStartedAtMillis = matchMonitor.matchStartedAtMillis ?? Date.now();
   // Start the recorder ONCE per match (singleton — same path returned if already recording)
   const recordingPath = screenRecorder.start('shared');
   const matchStartTime = new Date().toISOString();
@@ -87,7 +93,13 @@ screenMonitor.on('matchStarted', () => {
   }
 });
 
-screenMonitor.on('resultScreenDetected', async () => {
+matchMonitor.on('resultScreenDetected', async () => {
+  // P1-10: Riot API から実測値(KDA・マップ・エージェント)を映像解析と並行取得。
+  // fetchLatestMatchStats は throw せず、失敗時は null(映像解析にフォールバック)。
+  const riotStatsPromise = matchMonitor.activeSource === 'riot'
+    ? fetchLatestMatchStats({ sinceMillis: lastMatchStartedAtMillis ?? Date.now() - 90 * 60_000 })
+    : Promise.resolve(null);
+
   const videoPath = await screenRecorder.stop();
 
   // Guard: resultScreenDetected fired but recorder was never started (e.g. monitor
@@ -115,7 +127,17 @@ screenMonitor.on('resultScreenDetected', async () => {
   }
 
   try {
-    const { result: videoAnalysis, events, meta } = await analyzeVideo(videoPath, broadcastProgress);
+    const { result, events, meta } = await analyzeVideo(videoPath, broadcastProgress);
+    const riotStats = await riotStatsPromise;
+    if (riotStats) {
+      console.log(`[autorecord] riot stats acquired (match ${riotStats.matchId})`);
+    }
+    const videoAnalysis = mergeStats(result, riotStats);
+    const mergedMeta = {
+      ...meta,
+      mapName: riotStats?.mapName ?? meta.mapName,
+      agent: riotStats?.agent ?? null,
+    };
 
     for (const userId of activeUsers) {
       const session = activeSessions.get(userId);
@@ -123,9 +145,9 @@ screenMonitor.on('resultScreenDetected', async () => {
       db.prepare(
         `UPDATE match_sessions SET video_analysis_json = ?, status = 'done' WHERE id = ?`
       ).run(JSON.stringify(videoAnalysis), session.sessionId);
-      // Persist the per-frame timeline + map for this session (one analysis → many sessions)
+      // Persist the per-frame timeline + map/agent for this session (one analysis → many sessions)
       try {
-        eventLog.persist(session.sessionId, events, meta);
+        eventLog.persist(session.sessionId, events, mergedMeta);
       } catch (logErr) {
         console.warn('[autorecord] failed to persist match events:', logErr.message);
       }
@@ -154,8 +176,8 @@ screenMonitor.on('resultScreenDetected', async () => {
   }
 });
 
-screenMonitor.on('monitorError', (msg) => {
-  console.error('[screenMonitor] error:', msg);
+matchMonitor.on('monitorError', (msg) => {
+  console.error('[matchMonitor] error:', msg);
 });
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
@@ -179,7 +201,7 @@ router.get('/autorecord/status', (req, res) => {
 
   // Send current state immediately
   res.write(`event: connected\ndata: ${JSON.stringify({
-    state: screenMonitor.state,
+    state: matchMonitor.state,
     isRecording: screenRecorder.isRecording,
     timestamp: new Date().toISOString(),
   })}\n\n`);
@@ -188,7 +210,7 @@ router.get('/autorecord/status', (req, res) => {
   const heartbeat = setInterval(() => {
     try {
       res.write(`event: heartbeat\ndata: ${JSON.stringify({
-        state: screenMonitor.state,
+        state: matchMonitor.state,
         timestamp: new Date().toISOString(),
       })}\n\n`);
     } catch {
@@ -211,11 +233,11 @@ router.post('/autorecord/start', requireAuth, (req, res) => {
   if (req.user.is_paid !== 1) {
     return res.status(403).json({ message: 'この機能はライセンスキーが必要です。' });
   }
-  if (screenMonitor.state !== 'idle' && screenMonitor.isRunning) {
-    return res.json({ ok: true, state: screenMonitor.state, message: '既に監視中です' });
+  if (matchMonitor.state !== 'idle' && matchMonitor.isRunning) {
+    return res.json({ ok: true, state: matchMonitor.state, message: '既に監視中です' });
   }
-  screenMonitor.start();
-  res.json({ ok: true, state: screenMonitor.state });
+  matchMonitor.start();
+  res.json({ ok: true, state: matchMonitor.state });
 });
 
 // Stop monitoring
@@ -223,7 +245,7 @@ router.post('/autorecord/stop', requireAuth, (req, res) => {
   if (req.user.is_paid !== 1) {
     return res.status(403).json({ message: 'この機能はライセンスキーが必要です。' });
   }
-  screenMonitor.stop();
+  matchMonitor.stop();
   screenRecorder.stop().catch(() => {});
   activeSessions.delete(req.user.id);
   res.json({ ok: true });
@@ -235,7 +257,7 @@ router.get('/autorecord/state', requireAuth, (req, res) => {
     return res.status(403).json({ message: 'この機能はライセンスキーが必要です。' });
   }
   res.json({
-    state: screenMonitor.state,
+    state: matchMonitor.state,
     isRecording: screenRecorder.isRecording,
   });
 });

@@ -99,6 +99,15 @@ export default function FormScreen({
     tauriApi.getAiConfig().then((cfg) => setAiProvider(cfg.provider)).catch(() => {});
   }, []);
 
+  // P1-10: Riot API がエージェントを取得済みなら自動入力(ゼロ入力)。
+  // ユーザーが既に入力している場合は上書きしない。
+  useEffect(() => {
+    if (videoAnalysis?.agent && !agent.trim()) {
+      setAgent(videoAnalysis.agent);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoAnalysis]);
+
   // Persist form data across navigation
   useEffect(() => {
     sessionStorage.setItem(
@@ -229,7 +238,7 @@ export default function FormScreen({
           <span className="cta-icon">🎮</span>
           <div>
             <strong>自動録画で試合分析</strong>
-            <p>Valorantを自動録画し、YOLOv8でKDA・ポジション等を計測します</p>
+            <p>試合を自動検知し、KDA・マップ・エージェントを自動取得します</p>
           </div>
           <span className="cta-arrow">→</span>
         </div>
@@ -239,6 +248,8 @@ export default function FormScreen({
         <div className="video-analysis-badge">
           <span>📊 自動解析データあり</span>
           <span className="badge-detail">
+            {videoAnalysis.mapName && `${videoAnalysis.mapName} · `}
+            {videoAnalysis.agent && `${videoAnalysis.agent} · `}
             KDA {videoAnalysis.kills}/{videoAnalysis.deaths}/{videoAnalysis.assists} ·
             HS率 {Math.round(videoAnalysis.headshotRate * 100)}%
             {usageStatus?.tier === "cloud" && " · この分析は2クレジット消費"}

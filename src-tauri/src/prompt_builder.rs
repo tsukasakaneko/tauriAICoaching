@@ -49,6 +49,11 @@ impl AnalyzePayload {
 
 #[derive(Debug, Deserialize)]
 pub struct VideoAnalysisData {
+    /// P1-10: Riot ローカル API 由来(旧ペイロードには無いので default)
+    #[serde(rename = "mapName", default)]
+    pub map_name: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
     pub kills: Option<u32>,
     pub deaths: Option<u32>,
     pub assists: Option<u32>,
@@ -213,6 +218,12 @@ progress（前回比）の規則:
 }
 
 fn push_video_metrics(prompt: &mut String, va: &VideoAnalysisData) {
+    if let Some(map) = &va.map_name {
+        prompt.push_str(&format!("- マップ: {}\n", map));
+    }
+    if let Some(agent) = &va.agent {
+        prompt.push_str(&format!("- 使用エージェント: {}\n", agent));
+    }
     if let (Some(k), Some(d), Some(a)) = (va.kills, va.deaths, va.assists) {
         prompt.push_str(&format!("- KDA: {}/{}/{}\n", k, d, a));
     }
@@ -259,7 +270,7 @@ pub fn build_user_prompt(payload: &AnalyzePayload) -> String {
     );
 
     if let Some(va) = &payload.video_analysis {
-        prompt.push_str("\n【自動解析データ (YOLOv8)】\n");
+        prompt.push_str("\n【自動解析データ】\n");
         push_video_metrics(&mut prompt, va);
         prompt.push_str("\n上記の客観的データと、プレイヤーの自己評価を合わせて分析してください。\n");
     }
@@ -333,6 +344,8 @@ mod tests {
 
     fn metrics(headshot_rate: f32) -> VideoAnalysisData {
         VideoAnalysisData {
+            map_name: Some("ascent".to_string()),
+            agent: Some("Jett".to_string()),
             kills: Some(12),
             deaths: Some(10),
             assists: Some(4),
@@ -391,6 +404,17 @@ mod tests {
         assert!(prompt.contains("前回比の指示"), "comparison instruction expected");
         assert!(prompt.contains("progress セクション"), "numeric progress should be requested");
         assert!(payload.has_comparable_previous());
+    }
+
+    // P1-10: Riot ローカル API 由来のマップ/エージェントがプロンプトに入ること
+    #[test]
+    fn user_prompt_includes_map_and_agent() {
+        let mut payload = base_payload();
+        payload.video_analysis = Some(metrics(0.28));
+        let prompt = build_user_prompt(&payload);
+        assert!(prompt.contains("【自動解析データ】"), "source-agnostic header expected");
+        assert!(prompt.contains("マップ: ascent"), "map line expected");
+        assert!(prompt.contains("使用エージェント: Jett"), "agent line expected");
     }
 
     #[test]
