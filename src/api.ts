@@ -12,6 +12,7 @@ import type {
   ReplayData,
   HistoryResponse,
   SavedReport,
+  PreviousContext,
 } from "./types";
 
 const BASE_URL = "http://127.0.0.1:3001";
@@ -91,6 +92,12 @@ export const api = {
 
   getReport: (id: number) => request<SavedReport>(`/reports/${id}`),
 
+  // 前回比 (P1-9): 前回セッションの指標と前回レポートの課題ダイジェスト
+  getPreviousContext: (excludeSession: number | null) =>
+    request<PreviousContext>(
+      `/previous-context${excludeSession != null ? `?excludeSession=${excludeSession}` : ""}`
+    ),
+
   // SSE factory — EventSource needs the token as a query param
   createRecordingEventSource: (): EventSource => {
     const token = getToken() ?? "";
@@ -103,7 +110,8 @@ export const api = {
 export const tauriApi = {
   analyze: (
     formData: CoachingFormData,
-    videoAnalysis: VideoAnalysisResult | null
+    videoAnalysis: VideoAnalysisResult | null,
+    previousSession: PreviousContext | null = null
   ): Promise<CoachingReport> =>
     invoke<CoachingReport>("ai_analyze", {
       payload: {
@@ -112,6 +120,7 @@ export const tauriApi = {
         selfAssessment: formData.selfAssessment,
         review: formData.review,
         videoAnalysis: videoAnalysis ?? null,
+        previousSession: previousSession ?? null,
       },
     }),
 
@@ -121,7 +130,8 @@ export const tauriApi = {
   // P0-3: プロンプトは Tauri 側 prompt_builder.rs(知識ベース入り)で構築して送る。
   analyzeRemote: async (
     formData: CoachingFormData,
-    videoAnalysis: VideoAnalysisResult | null
+    videoAnalysis: VideoAnalysisResult | null,
+    previousSession: PreviousContext | null = null
   ): Promise<CoachingReport> => {
     const prompts = await invoke<{ systemPrompt: string; userPrompt: string }>(
       "build_analysis_prompts",
@@ -132,6 +142,7 @@ export const tauriApi = {
           selfAssessment: formData.selfAssessment,
           review: formData.review,
           videoAnalysis: videoAnalysis ?? null,
+          previousSession: previousSession ?? null,
         },
       }
     );

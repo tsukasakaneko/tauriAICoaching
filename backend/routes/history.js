@@ -72,6 +72,57 @@ router.get('/history', requireAuth, (req, res) => {
   res.json({ sessions, standaloneReports });
 });
 
+// GET /previous-context — previous session metrics + previous report digest for
+// 前回比 (P1-9). excludeSession は自動録画フローで「現セッション」が既に最新 done
+// として保存されているため、それを前回扱いしないための除外指定。
+router.get('/previous-context', requireAuth, (req, res) => {
+  const excludeRaw = parseInt(req.query.excludeSession, 10);
+  const exclude = isNaN(excludeRaw) ? -1 : excludeRaw;
+
+  let metrics = null;
+  let metricsDate = null;
+  const sessionRow = db.prepare(
+    `SELECT started_at, video_analysis_json FROM match_sessions
+     WHERE user_id = ? AND status = 'done' AND video_analysis_json IS NOT NULL AND id != ?
+     ORDER BY id DESC LIMIT 1`
+  ).get(req.user.id, exclude);
+  if (sessionRow) {
+    try {
+      metrics = JSON.parse(sessionRow.video_analysis_json);
+      metricsDate = sessionRow.started_at;
+    } catch {
+      metrics = null;
+    }
+  }
+
+  let report = null;
+  let reportDate = null;
+  const reportRow = db.prepare(
+    `SELECT report_json, created_at FROM coaching_reports
+     WHERE user_id = ? AND (session_id IS NULL OR session_id != ?)
+     ORDER BY id DESC LIMIT 1`
+  ).get(req.user.id, exclude);
+  if (reportRow) {
+    try {
+      const parsed = JSON.parse(reportRow.report_json);
+      report = {
+        improvementTitles: (parsed.improvements ?? [])
+          .map((i) => i?.title)
+          .filter((t) => typeof t === 'string'),
+        focus: typeof parsed.summary?.focus === 'string' ? parsed.summary.focus : null,
+        trainingPlan: Array.isArray(parsed.training_plan)
+          ? parsed.training_plan.filter((d) => typeof d === 'string')
+          : [],
+      };
+      reportDate = reportRow.created_at;
+    } catch {
+      report = null;
+    }
+  }
+
+  res.json({ metrics, metricsDate, report, reportDate });
+});
+
 // POST /reports — persist a generated report (sessionId nullable for manual analyses)
 router.post('/reports', requireAuth, (req, res) => {
   const { sessionId, report } = req.body ?? {};

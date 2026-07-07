@@ -506,7 +506,8 @@ app.post('/analyze', optionalLicense, async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
-      max_tokens: 2000,
+      // P1-9: progress(前回比)セクション追加分のヘッドルームを確保
+      max_tokens: 2600,
       system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: userPrompt }],
     });
@@ -530,6 +531,11 @@ app.post('/analyze', optionalLicense, async (req, res) => {
       typeof parsed.summary.weaknesses !== 'string' || typeof parsed.summary.focus !== 'string'
     ) {
       throw new Error('AI response failed structural validation');
+    }
+
+    // P1-9: progress(前回比)は任意項目。壊れていたら落とすだけでレポートは通す
+    if (parsed.progress != null && !Array.isArray(parsed.progress.comparisons)) {
+      delete parsed.progress;
     }
 
     // 分析成功後にサーバー台帳から消費(手動1・自動録画2。無料/pro は消費なし)

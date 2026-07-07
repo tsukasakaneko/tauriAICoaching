@@ -55,6 +55,29 @@ export default function ReportScreen({ report, sessionId, onBack, onUpgrade, onR
         </div>
       </section>
 
+      {report.progress && report.progress.comparisons.length > 0 && (
+        <section className="report-section progress-section">
+          <h2>前回比</h2>
+          <div className="progress-grid">
+            {report.progress.comparisons.map((c, i) => (
+              <div key={i} className={`progress-card progress-card--${c.assessment}`}>
+                <h3>{c.metric}</h3>
+                <p className="progress-values">
+                  <span className="progress-prev">{c.previous}</span>
+                  <span className="progress-arrow">
+                    {c.assessment === "improved" ? "↑" : c.assessment === "declined" ? "↓" : "→"}
+                  </span>
+                  <span className="progress-curr">{c.current}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+          {report.progress.comment && (
+            <p className="progress-comment">{report.progress.comment}</p>
+          )}
+        </section>
+      )}
+
       <section className="report-section improvements-section">
         <h2>改善点</h2>
         {report.improvements.map((item, i) => (

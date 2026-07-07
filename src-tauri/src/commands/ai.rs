@@ -42,9 +42,15 @@ fn check_input_size(payload: &AnalyzePayload) -> Result<(), String> {
 /// 使うため、フロントエンドが構築済みプロンプトを取得してサーバーへ送る。
 #[tauri::command]
 pub fn build_analysis_prompts(payload: AnalyzePayload) -> Result<BuiltPrompts, String> {
+    // check_input_size はユーザーの自由入力のみ対象。previousSession は
+    // ローカル backend 由来(過去の解析結果)のためサイズ検査は不要。
     check_input_size(&payload)?;
     Ok(BuiltPrompts {
-        system_prompt: build_system_prompt(&payload.agent, &payload.rank),
+        system_prompt: build_system_prompt(
+            &payload.agent,
+            &payload.rank,
+            payload.has_comparable_previous(),
+        ),
         user_prompt: build_user_prompt(&payload),
     })
 }
@@ -126,7 +132,11 @@ pub async fn ai_analyze(
 
     check_input_size(&payload)?;
 
-    let system_prompt = build_system_prompt(&payload.agent, &payload.rank);
+    let system_prompt = build_system_prompt(
+        &payload.agent,
+        &payload.rank,
+        payload.has_comparable_previous(),
+    );
     let user_prompt = build_user_prompt(&payload);
 
     // クレジット消費はサーバー台帳側で行う(P0-1)。ローカルでのデクリメントは廃止。

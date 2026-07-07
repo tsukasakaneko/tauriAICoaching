@@ -34,6 +34,24 @@ pub struct CoachingReport {
     pub improvements: Vec<Improvement>,
     pub training_plan: Vec<String>,
     pub summary: Summary,
+    /// 前回比 (P1-9)。前回データがない場合は AI が出力しない
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress: Option<Progress>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Progress {
+    pub comparisons: Vec<ProgressComparison>,
+    #[serde(default)]
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProgressComparison {
+    pub metric: String,
+    pub previous: String,
+    pub current: String,
+    pub assessment: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -163,7 +181,8 @@ async fn call_claude(
 
     let request_body = ClaudeRequest {
         model,
-        max_tokens: 2048,
+        // P1-9: progress(前回比)セクション追加分のヘッドルームを確保
+        max_tokens: 2600,
         system: system_prompt,
         messages: vec![ClaudeMessage { role: "user", content: user_prompt }],
     };
@@ -368,7 +387,7 @@ fn strip_code_fences(raw: &str) -> &str {
 
 fn parse_and_validate(raw: String) -> Result<CoachingReport, String> {
     let clean = strip_code_fences(&raw);
-    let parsed: serde_json::Value = serde_json::from_str(clean)
+    let mut parsed: serde_json::Value = serde_json::from_str(clean)
         .map_err(|_| "AIのレスポンスがJSON形式ではありません。もう一度お試しください。".to_string())?;
 
     // Validate structure
@@ -395,6 +414,15 @@ fn parse_and_validate(raw: String) -> Result<CoachingReport, String> {
         || summary["focus"].as_str().is_none()
     {
         return Err("AIレスポンスのsummaryフィールドが不正です".to_string());
+    }
+
+    // progress は任意項目。壊れた progress でレポート全体を失敗させない
+    if !parsed["progress"].is_null()
+        && serde_json::from_value::<Progress>(parsed["progress"].clone()).is_err()
+    {
+        if let Some(obj) = parsed.as_object_mut() {
+            obj.remove("progress");
+        }
     }
 
     serde_json::from_value(parsed)

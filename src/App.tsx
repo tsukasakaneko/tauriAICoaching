@@ -95,6 +95,7 @@ export default function App() {
         <FormScreen
           user={user}
           videoAnalysis={videoAnalysis}
+          sessionId={sessionId}
           onReportReady={handleReportReady}
           onLogout={handleLogout}
           onAutoRecord={() => setScreen("autorecord")}

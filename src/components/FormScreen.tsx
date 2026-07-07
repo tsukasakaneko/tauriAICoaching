@@ -8,8 +8,9 @@ import type {
   VideoAnalysisResult,
   UsageStatus,
   AiProvider,
+  PreviousContext,
 } from "../types";
-import { tauriApi } from "../api";
+import { api, tauriApi } from "../api";
 
 const RANKS: Rank[] = [
   "アイアン", "ブロンズ", "シルバー", "ゴールド", "プラチナ",
@@ -60,6 +61,7 @@ function isLimitError(msg: string) {
 interface Props {
   user: User;
   videoAnalysis: VideoAnalysisResult | null;
+  sessionId: number | null;
   onReportReady: (report: CoachingReport) => void;
   onLogout: () => void;
   onAutoRecord: () => void;
@@ -71,6 +73,7 @@ interface Props {
 export default function FormScreen({
   user,
   videoAnalysis,
+  sessionId,
   onReportReady,
   onLogout,
   onAutoRecord,
@@ -139,13 +142,25 @@ export default function FormScreen({
         selfAssessment,
         review,
       };
+      // P1-9: 前回セッションの指標と前回レポートの課題を取得(前回比用)。
+      // 取得失敗・データ無しは「前回なし」として分析を続行する。
+      let previousSession: PreviousContext | null = null;
+      try {
+        previousSession = await api.getPreviousContext(sessionId);
+        if (previousSession && !previousSession.metrics && !previousSession.report) {
+          previousSession = null;
+        }
+      } catch {
+        previousSession = null;
+      }
+
       // P0-2: 無料ティア(3回/日)と cloud ティア+Cloud プロバイダはリモート経由。
       // pro や自前APIキー/Ollama 利用時はローカル(Tauri コマンド)経由。
       const useRemote =
         isFreeTier || (usageStatus?.tier === "cloud" && aiProvider === "cloud");
       const result = useRemote
-        ? await tauriApi.analyzeRemote(formData, videoAnalysis)
-        : await tauriApi.analyze(formData, videoAnalysis);
+        ? await tauriApi.analyzeRemote(formData, videoAnalysis, previousSession)
+        : await tauriApi.analyze(formData, videoAnalysis, previousSession);
       onReportReady(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "分析に失敗しました";
