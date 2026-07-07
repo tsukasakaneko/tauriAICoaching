@@ -1,0 +1,33 @@
+# P1-12: 購入 LP (lp/) を GitHub Pages にデプロイする。
+# 事前にリポジトリ Settings → Pages → Source を「GitHub Actions」に設定すること。
+name: Deploy LP to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["lp/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: lp
+      - id: deployment
+        uses: actions/deploy-pages@v4

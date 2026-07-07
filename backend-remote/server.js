@@ -147,9 +147,14 @@ async function sendLicenseEmail(to, productLabel, licenseKey) {
   });
 }
 
-// ── Allow Tauri webview origins
+// ── Allow Tauri webview origins + 購入 LP (P1-12, GitHub Pages)
 app.use(cors({
-  origin: ['tauri://localhost', 'https://tauri.localhost', 'http://localhost:1420'],
+  origin: [
+    'tauri://localhost',
+    'https://tauri.localhost',
+    'http://localhost:1420',
+    'https://tsukasakaneko.github.io',
+  ],
   credentials: true,
 }));
 
@@ -273,8 +278,9 @@ app.post('/create-checkout-session', async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       line_items: [{ price: PRICE_MAP[product], quantity: 1 }],
       mode: isSubscription ? 'subscription' : 'payment',
-      success_url: `${process.env.APP_SUCCESS_URL || 'https://coachmate.app/purchase-complete'}`,
-      cancel_url: `${process.env.APP_CANCEL_URL || 'https://coachmate.app/purchase-cancel'}`,
+      // P1-12: 既定は購入 LP(GitHub Pages)の完了/キャンセルページ。env で上書き可
+      success_url: `${process.env.APP_SUCCESS_URL || 'https://tsukasakaneko.github.io/tauriAICoaching/purchase-complete.html'}`,
+      cancel_url: `${process.env.APP_CANCEL_URL || 'https://tsukasakaneko.github.io/tauriAICoaching/purchase-cancel.html'}`,
       customer_creation: isSubscription ? undefined : 'always',
       metadata: { tier: tierMap[product], product_label: productLabels[product] },
       subscription_data: isSubscription

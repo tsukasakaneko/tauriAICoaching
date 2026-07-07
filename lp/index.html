@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CoachMate for VALORANT — AIがあなた専属のコーチに</title>
+  <meta name="description" content="試合終了を自動検知し、KDA・マップ・エージェントからAIがパーソナライズされた改善プランを生成。VALORANT専用の日本語AIコーチングアプリ。無料で1日3回まで分析できます。" />
+  <meta property="og:title" content="CoachMate for VALORANT — AIがあなた専属のコーチに" />
+  <meta property="og:description" content="試合を自動解析して「次に直すべき1つ」を提示。7日間トレーニングプランと前回比トラッキングで確実に上達。" />
+  <meta property="og:image" content="assets/screen-report.png" />
+  <link rel="icon" href="assets/icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="appbar" id="appbar">
+    <div class="container appbar-inner">
+      <a class="brand" href="#">
+        <img src="assets/icon.png" alt="" />
+        <span><span class="accent">CoachMate</span> for VALORANT</span>
+      </a>
+      <nav class="appbar-nav">
+        <a href="#features">機能</a>
+        <a href="#screens">スクリーンショット</a>
+        <a href="#pricing">料金</a>
+        <a href="#faq">FAQ</a>
+        <a class="nav-cta" href="#pricing">購入する</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div>
+        <span class="hero-chip">🎯 VALORANT 専用・日本語 AI コーチング</span>
+        <h1>その1試合を、<br /><span class="accent">次に勝つ材料</span>に変える。</h1>
+        <p class="lead">
+          試合終了を自動検知して KDA・マップ・エージェントを取得。AI があなたのプレイを分析し、
+          改善点・根本原因・7日間トレーニングプランまで日本語で提示します。
+          手入力ゼロ、録画データは外部に送信しません。
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-filled btn-large" href="https://github.com/tsukasakaneko/tauriAICoaching/releases/latest">⬇ 無料ダウンロード</a>
+          <a class="btn btn-outlined btn-large" href="#pricing">料金を見る</a>
+        </div>
+        <p class="hero-note">無料プランは手動分析が1日3回まで。クレジットカード登録不要。Windows 10/11 対応。</p>
+      </div>
+      <div>
+        <img class="hero-shot" src="assets/screen-report.png" alt="AIコーチングレポート画面 — 前回比トラッキングと改善点" />
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-head">
+        <h2>プレイするだけ。分析は CoachMate が。</h2>
+        <p>試合後の VOD 解析に徹した、Riot ポリシー準拠の設計です。</p>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🎮</div>
+          <h3>試合終了を自動検知</h3>
+          <p>Riot クライアントのローカル API と連携し、試合が終わると KDA・マップ・エージェントを自動取得。手入力ゼロでレポートが生成されます。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🧠</div>
+          <h3>AI コーチングレポート</h3>
+          <p>改善点とその根本原因、明日から実行できる具体的アクション、7日間トレーニングプランを日本語で提示します。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📈</div>
+          <h3>前回比トラッキング</h3>
+          <p>「HS率 23%→28% に改善」のように前回セッションと数値で比較。前回の課題への進捗まで AI がフォローする閉ループ設計です。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🗂️</div>
+          <h3>分析履歴</h3>
+          <p>過去の全セッションとレポートを一覧から振り返り。リプレイ解析(ミニマップ行動履歴)も開発中です。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📤</div>
+          <h3>レポートを1クリック共有</h3>
+          <p>ブランド入りのレポート画像を1クリックで生成し、X へそのまま共有。成長の記録を仲間に見せられます。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>録画は外部送信なし</h3>
+          <p>録画・フレーム解析はすべてあなたの PC 内で完結。試合中のリアルタイム支援は行わない、Riot サードパーティポリシー準拠の設計です。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots -->
+  <section class="section section-alt" id="screens">
+    <div class="container">
+      <div class="section-head">
+        <h2>スクリーンショット</h2>
+        <p>ダークテーマの読みやすい UI で、分析から振り返りまで。</p>
+      </div>
+      <div class="shots-grid">
+        <figure class="shot-card">
+          <img src="assets/screen-report.png" alt="AIコーチングレポート画面" loading="lazy" />
+          <figcaption>AIコーチングレポート — 前回比・改善点・7日間プラン</figcaption>
+        </figure>
+        <figure class="shot-card">
+          <img src="assets/screen-history.png" alt="分析履歴画面" loading="lazy" />
+          <figcaption>分析履歴 — 過去のセッションとレポートを一覧</figcaption>
+        </figure>
+        <figure class="shot-card">
+          <img src="assets/screen-form.png" alt="コーチングフォーム画面" loading="lazy" />
+          <figcaption>コーチングフォーム — 自動解析データを引き継いで分析</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="section" id="pricing">
+    <div class="container">
+      <div class="section-head">
+        <h2>料金プラン</h2>
+        <p>まずは無料で。気に入ったらクレジットで必要な分だけ、または月額で使い放題に近く。<br />🎁 初回アクティベートで +10 クレジットボーナス!</p>
+      </div>
+
+      <p class="pricing-group-title">サブスクリプション(自動録画解析つき)</p>
+      <div class="pricing-grid" style="max-width: 560px;">
+        <div class="price-card price-card--highlight">
+          <span class="price-chip">人気 · 25% OFF</span>
+          <span class="price-name">年額プラン</span>
+          <span class="price-amount">¥8,800<small> /年(¥733/月相当)</small></span>
+          <span class="price-desc">600 クレジット付与(50/月相当)・自動録画解析・すべての機能</span>
+          <button class="btn btn-filled" data-product="yearly">年額で購入</button>
+        </div>
+        <div class="price-card">
+          <span class="price-name">月額プラン</span>
+          <span class="price-amount">¥980<small> /月</small></span>
+          <span class="price-desc">毎月 50 クレジット付与(未使用分は上限100まで繰越)・自動録画解析</span>
+          <button class="btn btn-tonal" data-product="monthly">月額で購入</button>
+        </div>
+      </div>
+
+      <p class="pricing-group-title">クレジットパック(買い切り・6ヶ月有効)</p>
+      <div class="pricing-grid">
+        <div class="price-card">
+          <span class="price-name">スターター</span>
+          <span class="price-amount">¥300</span>
+          <span class="price-desc">10 クレジット(30円/回)。まずはお試しに。</span>
+          <button class="btn btn-tonal" data-product="starter">購入する</button>
+        </div>
+        <div class="price-card">
+          <span class="price-name">スタンダード</span>
+          <span class="price-amount">¥800</span>
+          <span class="price-desc">30 クレジット(26.7円/回)。週数回プレイする方に。</span>
+          <button class="btn btn-tonal" data-product="standard">購入する</button>
+        </div>
+        <div class="price-card">
+          <span class="price-name">プロパック</span>
+          <span class="price-amount">¥1,980</span>
+          <span class="price-desc">80 クレジット(24.8円/回)。毎日ランクを回す方に。</span>
+          <button class="btn btn-tonal" data-product="pro_pack">購入する</button>
+        </div>
+      </div>
+
+      <p class="checkout-error" id="checkout-error"></p>
+
+      <ul class="pricing-notes">
+        <li>価格はすべて税込です。決済は Stripe のセキュアなチェックアウトで行われます。</li>
+        <li>クレジット消費: 手動分析 1 / 自動録画の分析 2。無料プランは手動分析 1日3回まで。</li>
+        <li>購入後、ライセンスキーをメールでお届けします(迷惑メールフォルダもご確認ください)。</li>
+        <li>クレジットは購入から6ヶ月で失効します。ライセンスキーは1台の端末でご利用いただけます。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section section-alt" id="faq">
+    <div class="container">
+      <div class="section-head">
+        <h2>よくある質問</h2>
+      </div>
+      <div class="faq-list">
+        <details>
+          <summary>無料でどこまで使えますか？</summary>
+          <p>手動での AI 分析が1日3回まで無料です。ランク・エージェント・振り返りを入力すると、改善点と7日間トレーニングプランを含むレポートが生成されます。自動録画解析はクレジット(またはサブスク)が必要です。</p>
+        </details>
+        <details>
+          <summary>購入後、どうやって使い始めますか？</summary>
+          <p>決済完了後、ライセンスキーがメールで届きます。アプリの「設定 → ライセンス」でキーを入力して有効化してください。初回アクティベートで +10 クレジットのボーナスが付きます。</p>
+        </details>
+        <details>
+          <summary>録画やプレイデータはどこかに送信されますか？</summary>
+          <p>録画・フレーム画像はすべてあなたの PC 内でのみ処理・保存され、外部サーバーには送信されません。AI 分析に送信されるのはランクや KDA などの数値・テキストのみです。詳細は<a href="legal/privacy-policy.html">プライバシーポリシー</a>をご覧ください。</p>
+        </details>
+        <details>
+          <summary>BAN のリスクはありませんか？</summary>
+          <p>CoachMate はゲームメモリの読み取り・改変・入力自動化を一切行いません。試合結果の取得は Riot が公開しているローカル API の読み取り専用アクセスのみで、試合中のリアルタイム支援も行わない、Riot サードパーティポリシーに準拠した設計です。</p>
+        </details>
+        <details>
+          <summary>返金はできますか？</summary>
+          <p>デジタルコンテンツの性質上、ライセンスキー送付後の返金は原則お受けできません。二重決済などの例外は<a href="legal/refund-policy.html">返金ポリシー</a>をご確認ください。購入前に無料プランでのお試しをおすすめします。</p>
+        </details>
+        <details>
+          <summary>対応環境は?</summary>
+          <p>Windows 10/11(64bit)に対応しています。AI 分析とライセンス認証にはインターネット接続が必要です。</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA band -->
+  <section class="cta-band">
+    <div class="container">
+      <h2>今日の試合から、上達を始めよう。</h2>
+      <p>ダウンロードは無料。1日3回の AI 分析で、まずは自分の課題を知るところから。</p>
+      <a class="btn btn-filled btn-large" href="https://github.com/tsukasakaneko/tauriAICoaching/releases/latest">⬇ 無料ダウンロード</a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="legal/tokushoho.html">特定商取引法に基づく表記</a>
+        <a href="legal/refund-policy.html">返金ポリシー</a>
+        <a href="legal/privacy-policy.html">プライバシーポリシー</a>
+        <a href="https://github.com/tsukasakaneko/tauriAICoaching">GitHub</a>
+      </div>
+      <p class="legal-note">
+        CoachMate for VALORANT は Riot Games によって承認・後援されたものではなく、Riot Games または
+        VALORANT の制作・管理に公式に関与するいかなる者の見解も反映するものではありません。
+        VALORANT および Riot Games は Riot Games, Inc. の商標または登録商標です。
+      </p>
+    </div>
+  </footer>
+
+  <script src="js/checkout.js"></script>
+</body>
+</html>
