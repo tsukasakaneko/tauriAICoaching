@@ -32,6 +32,9 @@ body {
   color: var(--text);
   line-height: 1.7;
   -webkit-font-smoothing: antialiased;
+  /* 日本語を文節単位で折り返す(Chromium系)。単語・助詞の途中で
+     改行されるのを防ぐ。未対応ブラウザは通常の折り返しにフォールバック */
+  word-break: auto-phrase;
 }
 
 img { max-width: 100%; display: block; }
