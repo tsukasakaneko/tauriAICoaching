@@ -106,7 +106,9 @@ async function analyzeVideo(videoPath, onProgress) {
       .map(e => ({ ...e, tMs: Math.round(e.frameIdx * INTERVAL_SECS * 1000) }))
       .sort((a, b) => a.frameIdx - b.frameIdx);
 
-    // Merge: prefer OCR result screen stats when available
+    // Merge: prefer OCR result screen stats when available.
+    // P1-10: この統計系(killfeed/OCR)はフォールバック。Riot API の実測値が
+    // 取れた場合は autorecord 側で statsMerge により上書きされる。
     const result = {
       kills: resultStats?.kills ?? kfResult.kills,
       deaths: resultStats?.deaths ?? kfResult.deaths,
@@ -123,6 +125,9 @@ async function analyzeVideo(videoPath, onProgress) {
       longestLoseStreak: null,
       totalRounds: resultStats?.totalRounds ?? null,
       wonRounds: resultStats?.wonRounds ?? null,
+      mapName: mapName ?? null,
+      agent: null,
+      statsSource: 'video',
     };
 
     return { result, events, meta: { mapName } };
@@ -146,6 +151,9 @@ function buildStubResult() {
     longestLoseStreak: 4,
     totalRounds: 24,
     wonRounds: 13,
+    mapName: null,
+    agent: null,
+    statsSource: 'video',
   };
 }
 

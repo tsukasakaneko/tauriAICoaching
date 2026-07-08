@@ -523,6 +523,8 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
   margin-bottom: 1.5rem;
 }
 .report-title {
@@ -563,6 +565,45 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
 .summary-card p { line-height: 1.6; }
 .focus-card { border-color: var(--accent); }
 .focus-card h3 { color: var(--accent); }
+
+/* ── 前回比 (P1-9) ─────────────────────────────────────────────────────────── */
+.progress-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+}
+.progress-card {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+}
+.progress-card h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+.progress-values {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 1.05rem;
+}
+.progress-prev { color: var(--text-muted); }
+.progress-curr { font-weight: 700; }
+.progress-card--improved { border-color: var(--success); }
+.progress-card--improved .progress-arrow,
+.progress-card--improved .progress-curr { color: var(--success); }
+.progress-card--declined { border-color: var(--accent); }
+.progress-card--declined .progress-arrow,
+.progress-card--declined .progress-curr { color: var(--accent); }
+.progress-comment {
+  margin-top: 0.75rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
 
 /* Improvements */
 .improvement-card {
@@ -800,6 +841,54 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
   font-size: 0.9rem;
   text-align: center;
   padding: 1.5rem 0;
+}
+
+/* ── Report share (P1-11) ──────────────────────────────────────────────────── */
+.report-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.report-actions .secondary-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.share-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  word-break: break-all;
+}
+.report-capture {
+  /* html-to-image のキャプチャ境界。背景は toPng の backgroundColor で塗る */
+  padding-bottom: 0.25rem;
+}
+.report-brand-footer {
+  margin-top: 1.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ── History Screen ────────────────────────────────────────────────────────── */
+.history-actions {
+  display: flex;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+.history-actions .secondary-btn {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+}
+.history-actions .secondary-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .loading-text {

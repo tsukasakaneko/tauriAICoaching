@@ -8,8 +8,9 @@ import type {
   VideoAnalysisResult,
   UsageStatus,
   AiProvider,
+  PreviousContext,
 } from "../types";
-import { tauriApi } from "../api";
+import { api, tauriApi } from "../api";
 
 const RANKS: Rank[] = [
   "アイアン", "ブロンズ", "シルバー", "ゴールド", "プラチナ",
@@ -60,20 +61,24 @@ function isLimitError(msg: string) {
 interface Props {
   user: User;
   videoAnalysis: VideoAnalysisResult | null;
+  sessionId: number | null;
   onReportReady: (report: CoachingReport) => void;
   onLogout: () => void;
   onAutoRecord: () => void;
   onSettings: () => void;
+  onHistory: () => void;
   onUpgradeNeeded: () => void;
 }
 
 export default function FormScreen({
   user,
   videoAnalysis,
+  sessionId,
   onReportReady,
   onLogout,
   onAutoRecord,
   onSettings,
+  onHistory,
   onUpgradeNeeded,
 }: Props) {
   const [rank, setRank] = useState<Rank>(() => loadSavedField<Rank>("rank", "シルバー"));
@@ -93,6 +98,15 @@ export default function FormScreen({
     tauriApi.getUsageStatus().then(setUsageStatus).catch(() => {});
     tauriApi.getAiConfig().then((cfg) => setAiProvider(cfg.provider)).catch(() => {});
   }, []);
+
+  // P1-10: Riot API がエージェントを取得済みなら自動入力(ゼロ入力)。
+  // ユーザーが既に入力している場合は上書きしない。
+  useEffect(() => {
+    if (videoAnalysis?.agent && !agent.trim()) {
+      setAgent(videoAnalysis.agent);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoAnalysis]);
 
   // Persist form data across navigation
   useEffect(() => {
@@ -137,13 +151,25 @@ export default function FormScreen({
         selfAssessment,
         review,
       };
+      // P1-9: 前回セッションの指標と前回レポートの課題を取得(前回比用)。
+      // 取得失敗・データ無しは「前回なし」として分析を続行する。
+      let previousSession: PreviousContext | null = null;
+      try {
+        previousSession = await api.getPreviousContext(sessionId);
+        if (previousSession && !previousSession.metrics && !previousSession.report) {
+          previousSession = null;
+        }
+      } catch {
+        previousSession = null;
+      }
+
       // P0-2: 無料ティア(3回/日)と cloud ティア+Cloud プロバイダはリモート経由。
       // pro や自前APIキー/Ollama 利用時はローカル(Tauri コマンド)経由。
       const useRemote =
         isFreeTier || (usageStatus?.tier === "cloud" && aiProvider === "cloud");
       const result = useRemote
-        ? await tauriApi.analyzeRemote(formData, videoAnalysis)
-        : await tauriApi.analyze(formData, videoAnalysis);
+        ? await tauriApi.analyzeRemote(formData, videoAnalysis, previousSession)
+        : await tauriApi.analyze(formData, videoAnalysis, previousSession);
       onReportReady(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "分析に失敗しました";
@@ -177,6 +203,9 @@ export default function FormScreen({
         </div>
         <div className="user-info">
           <span className="user-email">{user.email}</span>
+          <button className="icon-btn" onClick={onHistory} title="分析履歴">
+            🕒
+          </button>
           <button className="icon-btn" onClick={onSettings} title="設定">
             ⚙
           </button>
@@ -209,7 +238,7 @@ export default function FormScreen({
           <span className="cta-icon">🎮</span>
           <div>
             <strong>自動録画で試合分析</strong>
-            <p>Valorantを自動録画し、YOLOv8でKDA・ポジション等を計測します</p>
+            <p>試合を自動検知し、KDA・マップ・エージェントを自動取得します</p>
           </div>
           <span className="cta-arrow">→</span>
         </div>
@@ -219,6 +248,8 @@ export default function FormScreen({
         <div className="video-analysis-badge">
           <span>📊 自動解析データあり</span>
           <span className="badge-detail">
+            {videoAnalysis.mapName && `${videoAnalysis.mapName} · `}
+            {videoAnalysis.agent && `${videoAnalysis.agent} · `}
             KDA {videoAnalysis.kills}/{videoAnalysis.deaths}/{videoAnalysis.assists} ·
             HS率 {Math.round(videoAnalysis.headshotRate * 100)}%
             {usageStatus?.tier === "cloud" && " · この分析は2クレジット消費"}

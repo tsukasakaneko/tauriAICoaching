@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { Screen, User, CoachingReport, VideoAnalysisResult } from "./types";
+import type { Screen, User, CoachingReport, VideoAnalysisResult, SavedReport } from "./types";
 import { api, setToken, clearToken } from "./api";
 import LoginScreen from "./components/LoginScreen";
 import FormScreen from "./components/FormScreen";
@@ -7,6 +7,7 @@ import ReportScreen from "./components/ReportScreen";
 import AutoRecordScreen from "./components/AutoRecordScreen";
 import ReplayScreen from "./components/ReplayScreen";
 import SettingsScreen from "./components/SettingsScreen";
+import HistoryScreen from "./components/HistoryScreen";
 import UpgradeModal from "./components/UpgradeModal";
 
 export default function App() {
@@ -15,6 +16,8 @@ export default function App() {
   const [report, setReport] = useState<CoachingReport | null>(null);
   const [videoAnalysis, setVideoAnalysis] = useState<VideoAnalysisResult | null>(null);
   const [sessionId, setSessionId] = useState<number | null>(null);
+  // 履歴から開いたレポート/リプレイは「戻る」で履歴に帰す
+  const [reportOrigin, setReportOrigin] = useState<"form" | "history">("form");
   const [loading, setLoading] = useState(true);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
@@ -52,8 +55,24 @@ export default function App() {
   };
 
   const handleReportReady = (r: CoachingReport) => {
+    // 履歴用に永続化(fire-and-forget — 保存失敗でも画面表示は妨げない)
+    api.saveReport(sessionId, r).catch((e) => console.warn("report save failed:", e));
     setReport(r);
+    setReportOrigin("form");
     setScreen("report");
+  };
+
+  const handleOpenSavedReport = (saved: SavedReport) => {
+    setReport(saved.report);
+    setSessionId(saved.sessionId);
+    setReportOrigin("history");
+    setScreen("report");
+  };
+
+  const handleOpenReplayFromHistory = (sid: number) => {
+    setSessionId(sid);
+    setReport(null);
+    setScreen("replay");
   };
 
   const handleAnalysisDone = (analysis: VideoAnalysisResult, sid: number | null) => {
@@ -76,10 +95,12 @@ export default function App() {
         <FormScreen
           user={user}
           videoAnalysis={videoAnalysis}
+          sessionId={sessionId}
           onReportReady={handleReportReady}
           onLogout={handleLogout}
           onAutoRecord={() => setScreen("autorecord")}
           onSettings={() => setScreen("settings")}
+          onHistory={() => setScreen("history")}
           onUpgradeNeeded={() => setShowUpgradeModal(true)}
         />
       )}
@@ -89,8 +110,12 @@ export default function App() {
           report={report}
           sessionId={sessionId}
           onBack={() => {
-            setVideoAnalysis(null);
-            setScreen("form");
+            if (reportOrigin === "history") {
+              setScreen("history");
+            } else {
+              setVideoAnalysis(null);
+              setScreen("form");
+            }
           }}
           onUpgrade={() => setShowUpgradeModal(true)}
           onReplay={() => setScreen("replay")}
@@ -100,7 +125,16 @@ export default function App() {
       {screen === "replay" && sessionId !== null && (
         <ReplayScreen
           sessionId={sessionId}
-          onBack={() => setScreen("report")}
+          backLabel={report ? "← レポートに戻る" : "← 履歴に戻る"}
+          onBack={() => setScreen(report ? "report" : "history")}
+        />
+      )}
+
+      {screen === "history" && user && (
+        <HistoryScreen
+          onOpenReport={handleOpenSavedReport}
+          onOpenReplay={handleOpenReplayFromHistory}
+          onBack={() => setScreen("form")}
         />
       )}
 

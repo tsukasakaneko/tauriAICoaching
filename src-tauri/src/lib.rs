@@ -37,6 +37,7 @@ pub fn run() {
             commands::license::get_license_token,
             commands::license::get_device_hash,
             commands::shell::open_external_url,
+            commands::shell::save_report_image,
         ])
         .setup(|app| {
             // Restrict settings.json to owner-only (0o600) to protect stored API keys.

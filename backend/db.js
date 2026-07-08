@@ -108,4 +108,23 @@ db.exec(`
   )
 `);
 
+// ─── Analysis history (P1-8) ─────────────────────────────────────────────────
+
+// Persisted AI coaching reports. session_id is NULL for manual (form-only)
+// analyses; SET NULL keeps the report if its session is ever deleted.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS coaching_reports (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    session_id  INTEGER REFERENCES match_sessions(id) ON DELETE SET NULL,
+    report_json TEXT NOT NULL,
+    created_at  TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_coaching_reports_user
+  ON coaching_reports(user_id, id)
+`);
+
 module.exports = db;

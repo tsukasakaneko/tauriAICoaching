@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>プライバシーポリシー — CoachMate for VALORANT</title>
+  <link rel="icon" href="../assets/icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <header class="appbar">
+    <div class="container appbar-inner">
+      <a class="brand" href="../index.html">
+        <img src="../assets/icon.png" alt="" />
+        <span><span class="accent">CoachMate</span> for VALORANT</span>
+      </a>
+      <nav class="appbar-nav"><a href="../index.html">← トップへ戻る</a></nav>
+    </div>
+  </header>
+
+  <main class="page">
+    <h1>プライバシーポリシー</h1>
+    <p>
+      <span class="ph">CoachMate for VALORANT(以下「本サービス」)における</span><span class="ph">個人情報およびユーザーデータの取り扱いを定めます。</span>
+    </p>
+
+    <h2>1. 収集する情報</h2>
+    <h3>1.1 アカウント情報</h3>
+    <ul>
+      <li>メールアドレス、パスワード</li>
+      <li><span class="ph">これらは<strong>お客様の PC 内のローカルデータベースに保存</strong>されます。</span><br /><span class="ph">パスワードは bcrypt によりハッシュ化して保存され、</span><span class="ph">平文では保存されません。</span></li>
+    </ul>
+    <h3>1.2 ライセンス・購入情報(当方サーバーに保存)</h3>
+    <ul>
+      <li>ライセンスキーのハッシュ値(キーそのものは保存しません)</li>
+      <li>購入時のメールアドレス(ライセンスキーの送付・照会のため)</li>
+      <li>端末識別ハッシュ(OS のマシン ID から生成した匿名ハッシュ。キーの不正共有防止のため)</li>
+      <li>クレジットの付与・消費履歴(残高管理のため)</li>
+    </ul>
+    <h3>1.3 決済情報</h3>
+    <p>
+      決済は Stripe, Inc. が処理します。<br />
+      <span class="ph"><strong>クレジットカード番号が</strong></span><span class="ph"><strong>当方のサーバーに送信・保存されることはありません</strong>。</span><br />
+      <span class="ph">Stripe の個人情報の取り扱いは</span><span class="ph"><a href="https://stripe.com/jp/privacy">Stripe のプライバシーポリシー</a>をご確認ください。</span>
+    </p>
+
+    <h2>2. 録画データの取り扱い(重要)</h2>
+    <ul>
+      <li><span class="ph">自動録画機能で取得した</span><span class="ph"><strong>動画・フレーム画像は、</strong></span><span class="ph"><strong>すべてお客様の PC 内でのみ処理・保存され、</strong></span><span class="ph"><strong>外部のサーバーへ送信されることはありません</strong>。</span></li>
+      <li><span class="ph">録画の解析(KDA・ヘッドショット率・ポジション等の計測)も、</span><span class="ph">お客様の PC 内で実行されます。</span></li>
+      <li>録画ファイルはお客様ご自身でいつでも削除できます。</li>
+    </ul>
+
+    <h2>3. AI 分析時に外部へ送信される情報</h2>
+    <p>
+      <span class="ph">AI コーチングレポートの生成時、</span><span class="ph">以下の情報が分析のために</span><span class="ph">Anthropic, PBC の API</span><span class="ph">(クラウド AI 利用時は当方サーバーを経由)へ</span><span class="ph">送信されます。</span>
+    </p>
+    <ul>
+      <li>ランク帯、使用エージェント、自己評価の選択項目、試合振り返りの入力テキスト</li>
+      <li>録画解析から算出した統計値(KDA・ヘッドショット率・ダメージ・活動エリア・ラウンド勝敗等の数値データ)</li>
+    </ul>
+    <p>
+      <strong>動画・画像そのものが送信されることはありません。</strong><br />
+      <span class="ph">Anthropic API に送信されたデータの取り扱いは</span><span class="ph"><a href="https://www.anthropic.com/legal/privacy">Anthropic のプライバシーポリシー</a>に従います。</span><br />
+      <span class="ph">ローカル AI(Ollama)を選択した場合、</span><span class="ph">分析内容は外部へ送信されません。</span>
+    </p>
+
+    <h2>4. 利用目的</h2>
+    <ul>
+      <li>本サービスの提供(ライセンス認証・クレジット管理・AI 分析)</li>
+      <li>購入されたライセンスキーの送付、購入に関するお問い合わせ対応</li>
+      <li>不正利用(キーの共有・残高改ざん等)の防止</li>
+      <li>サービスの改善(個人を特定しない統計情報として)</li>
+    </ul>
+
+    <h2>5. 第三者提供・処理の委託</h2>
+    <p>
+      <span class="ph">法令に基づく場合を除き、</span><span class="ph">個人情報を第三者に販売・提供することはありません。</span><br />
+      <span class="ph">サービス提供のため、</span><span class="ph">以下の事業者に処理を委託しています。</span>
+    </p>
+    <table>
+      <tr><th>委託先</th><th>目的</th></tr>
+      <tr><td>Stripe, Inc.</td><td>決済処理</td></tr>
+      <tr><td>Anthropic, PBC</td><td>AI 分析(第3項に記載の内容のみ)</td></tr>
+      <tr><td>Twilio Inc.(SendGrid)</td><td>ライセンスキーのメール送付</td></tr>
+      <tr><td>Render Services, Inc.</td><td>サーバーホスティング</td></tr>
+    </table>
+
+    <h2>6. 保存期間</h2>
+    <ul>
+      <li>ライセンス・クレジット情報: サービス提供に必要な期間</li>
+      <li>アカウント情報(ローカル): アプリ内の「アカウント削除」でいつでも完全に削除できます</li>
+    </ul>
+
+    <h2>7. 開示・訂正・削除の請求</h2>
+    <p>
+      <span class="ph">ご本人からの個人情報の開示・訂正・削除のご請求には、</span><span class="ph">本人確認のうえ遅滞なく対応します。</span><br />
+      下記の窓口までご連絡ください。
+    </p>
+
+    <h2>8. 改定</h2>
+    <p><span class="ph">本ポリシーを改定する場合は、</span><span class="ph">アプリ内または販売ページで告知します。</span></p>
+
+    <h2>9. お問い合わせ窓口</h2>
+    <p class="placeholder-note">⚠ 【事業者名または氏名】【問い合わせ用メールアドレス】 — 販売開始前に記入してください。</p>
+
+    <p class="muted">制定日: 【日付】 / 最終改定日: 【日付】</p>
+  </main>
+</body>
+</html>

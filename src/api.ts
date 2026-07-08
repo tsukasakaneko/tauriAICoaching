@@ -10,6 +10,9 @@ import type {
   ActivationResult,
   UsageStatus,
   ReplayData,
+  HistoryResponse,
+  SavedReport,
+  PreviousContext,
 } from "./types";
 
 const BASE_URL = "http://127.0.0.1:3001";
@@ -78,6 +81,23 @@ export const api = {
   getSessionEvents: (sessionId: number) =>
     request<ReplayData>(`/sessions/${sessionId}/events`),
 
+  // Analysis history endpoints
+  getHistory: () => request<HistoryResponse>("/history"),
+
+  saveReport: (sessionId: number | null, report: CoachingReport) =>
+    request<{ id: number }>("/reports", {
+      method: "POST",
+      body: JSON.stringify({ sessionId, report }),
+    }),
+
+  getReport: (id: number) => request<SavedReport>(`/reports/${id}`),
+
+  // 前回比 (P1-9): 前回セッションの指標と前回レポートの課題ダイジェスト
+  getPreviousContext: (excludeSession: number | null) =>
+    request<PreviousContext>(
+      `/previous-context${excludeSession != null ? `?excludeSession=${excludeSession}` : ""}`
+    ),
+
   // SSE factory — EventSource needs the token as a query param
   createRecordingEventSource: (): EventSource => {
     const token = getToken() ?? "";
@@ -90,7 +110,8 @@ export const api = {
 export const tauriApi = {
   analyze: (
     formData: CoachingFormData,
-    videoAnalysis: VideoAnalysisResult | null
+    videoAnalysis: VideoAnalysisResult | null,
+    previousSession: PreviousContext | null = null
   ): Promise<CoachingReport> =>
     invoke<CoachingReport>("ai_analyze", {
       payload: {
@@ -99,6 +120,7 @@ export const tauriApi = {
         selfAssessment: formData.selfAssessment,
         review: formData.review,
         videoAnalysis: videoAnalysis ?? null,
+        previousSession: previousSession ?? null,
       },
     }),
 
@@ -108,7 +130,8 @@ export const tauriApi = {
   // P0-3: プロンプトは Tauri 側 prompt_builder.rs(知識ベース入り)で構築して送る。
   analyzeRemote: async (
     formData: CoachingFormData,
-    videoAnalysis: VideoAnalysisResult | null
+    videoAnalysis: VideoAnalysisResult | null,
+    previousSession: PreviousContext | null = null
   ): Promise<CoachingReport> => {
     const prompts = await invoke<{ systemPrompt: string; userPrompt: string }>(
       "build_analysis_prompts",
@@ -119,6 +142,7 @@ export const tauriApi = {
           selfAssessment: formData.selfAssessment,
           review: formData.review,
           videoAnalysis: videoAnalysis ?? null,
+          previousSession: previousSession ?? null,
         },
       }
     );
@@ -147,6 +171,13 @@ export const tauriApi = {
     invoke<ActivationResult>("activate_license", { key }),
 
   getLicenseStatus: (): Promise<LicenseStatus> => invoke<LicenseStatus>("get_license_status"),
+
+  // P1-11: レポート画像を Downloads に保存し、保存先パスを返す
+  saveReportImage: (base64Png: string): Promise<string> =>
+    invoke<string>("save_report_image", { base64Png }),
+
+  openExternalUrl: (url: string): Promise<void> =>
+    invoke<void>("open_external_url", { url }),
 
   openCheckout: async (product: string): Promise<void> => {
     const { url } = await request<{ url: string }>(

@@ -147,9 +147,14 @@ async function sendLicenseEmail(to, productLabel, licenseKey) {
   });
 }
 
-// ── Allow Tauri webview origins
+// ── Allow Tauri webview origins + 購入 LP (P1-12, GitHub Pages)
 app.use(cors({
-  origin: ['tauri://localhost', 'https://tauri.localhost', 'http://localhost:1420'],
+  origin: [
+    'tauri://localhost',
+    'https://tauri.localhost',
+    'http://localhost:1420',
+    'https://tsukasakaneko.github.io',
+  ],
   credentials: true,
 }));
 
@@ -273,8 +278,9 @@ app.post('/create-checkout-session', async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       line_items: [{ price: PRICE_MAP[product], quantity: 1 }],
       mode: isSubscription ? 'subscription' : 'payment',
-      success_url: `${process.env.APP_SUCCESS_URL || 'https://coachmate.app/purchase-complete'}`,
-      cancel_url: `${process.env.APP_CANCEL_URL || 'https://coachmate.app/purchase-cancel'}`,
+      // P1-12: 既定は購入 LP(GitHub Pages)の完了/キャンセルページ。env で上書き可
+      success_url: `${process.env.APP_SUCCESS_URL || 'https://tsukasakaneko.github.io/tauriAICoaching/purchase-complete.html'}`,
+      cancel_url: `${process.env.APP_CANCEL_URL || 'https://tsukasakaneko.github.io/tauriAICoaching/purchase-cancel.html'}`,
       customer_creation: isSubscription ? undefined : 'always',
       metadata: { tier: tierMap[product], product_label: productLabels[product] },
       subscription_data: isSubscription
@@ -506,7 +512,8 @@ app.post('/analyze', optionalLicense, async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
-      max_tokens: 2000,
+      // P1-9: progress(前回比)セクション追加分のヘッドルームを確保
+      max_tokens: 2600,
       system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: userPrompt }],
     });
@@ -530,6 +537,11 @@ app.post('/analyze', optionalLicense, async (req, res) => {
       typeof parsed.summary.weaknesses !== 'string' || typeof parsed.summary.focus !== 'string'
     ) {
       throw new Error('AI response failed structural validation');
+    }
+
+    // P1-9: progress(前回比)は任意項目。壊れていたら落とすだけでレポートは通す
+    if (parsed.progress != null && !Array.isArray(parsed.progress.comparisons)) {
+      delete parsed.progress;
     }
 
     // 分析成功後にサーバー台帳から消費(手動1・自動録画2。無料/pro は消費なし)
