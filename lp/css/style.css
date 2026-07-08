@@ -38,6 +38,9 @@ img { max-width: 100%; display: block; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+/* 文節単位の折り返し制御 — どの画面幅でも折り返しは必ず文節の切れ目で起こる */
+.ph { display: inline-block; }
+
 .container { max-width: 1080px; margin: 0 auto; padding: 0 1.25rem; }
 
 /* ── Top app bar ─────────────────────────────────────────────────────────── */
