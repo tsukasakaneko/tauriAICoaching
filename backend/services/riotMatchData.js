@@ -87,6 +87,34 @@ async function pdRequest(pathName) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * match-details からキル/デス/アシストの時系列を抽出する(純関数)。
+ * roundResults[].playerStats[].kills[] は「そのプレイヤーが取ったキル」の一覧
+ * なので、全 playerStats を走査すれば各キルイベントは一度ずつ現れる。
+ * → [{ type: 'kill'|'death'|'assist', gameTimeMs, round }] (gameTimeMs 昇順)
+ */
+function extractTimeline(details, puuid) {
+  const out = [];
+  for (const rr of details?.roundResults ?? []) {
+    for (const ps of rr?.playerStats ?? []) {
+      for (const k of ps?.kills ?? []) {
+        const t = k?.timeSinceGameStartMillis;
+        if (typeof t !== 'number') continue;
+        const round = rr.roundNum ?? k.round ?? null;
+        if (k.killer === puuid && k.victim !== puuid) {
+          out.push({ type: 'kill', gameTimeMs: t, round });
+        }
+        if (k.victim === puuid) {
+          out.push({ type: 'death', gameTimeMs: t, round });
+        } else if ((k.assistants ?? []).includes(puuid)) {
+          out.push({ type: 'assist', gameTimeMs: t, round });
+        }
+      }
+    }
+  }
+  return out.sort((a, b) => a.gameTimeMs - b.gameTimeMs);
+}
+
+/**
  * 直近の試合の統計を取得する。絶対に throw しない(失敗は null)。
  * match-details は試合終了から 30〜90 秒遅れて反映されるためリトライする。
  * sinceMillis より古い試合(=前の試合)は誤帰属を防ぐためスキップ。
@@ -132,6 +160,9 @@ async function fetchLatestMatchStats({ sinceMillis }) {
         won: myTeam?.won ?? null,
         queueId: details.matchInfo?.queueID ?? latest.QueueID ?? null,
         matchId: latest.MatchID,
+        // 動画内時刻への変換に使うエポックと、キル/デス/アシストの時系列
+        gameStartMillis: details.matchInfo?.gameStartMillis ?? latest.GameStartTime ?? null,
+        timeline: extractTimeline(details, puuid),
       };
     } catch {
       // 個別の失敗はリトライで吸収。窓を使い切ったら null
@@ -140,4 +171,4 @@ async function fetchLatestMatchStats({ sinceMillis }) {
   return null;
 }
 
-module.exports = { fetchLatestMatchStats, getAgentName, mapNameFromId, MAP_ID_TO_NAME };
+module.exports = { fetchLatestMatchStats, extractTimeline, getAgentName, mapNameFromId, MAP_ID_TO_NAME };

@@ -104,9 +104,19 @@ db.exec(`
     session_id        INTEGER PRIMARY KEY REFERENCES match_sessions(id) ON DELETE CASCADE,
     map_name          TEXT,
     agent             TEXT,
-    ally_side_initial TEXT                     -- 'attack' | 'defense' | null
+    ally_side_initial TEXT,                    -- 'attack' | 'defense' | null
+    events_source     TEXT                     -- 'riot' | 'yolo' | null
   )
 `);
+
+// Add replay-video columns to existing DBs that predate this migration
+for (const col of [
+  // 録画開始エポック(ms) — Riot タイムラインの動画内時刻変換に使う
+  "ALTER TABLE match_sessions ADD COLUMN recording_started_at_ms INTEGER",
+  "ALTER TABLE match_meta ADD COLUMN events_source TEXT",
+]) {
+  try { db.exec(col); } catch { /* column already exists */ }
+}
 
 // ─── Analysis history (P1-8) ─────────────────────────────────────────────────
 

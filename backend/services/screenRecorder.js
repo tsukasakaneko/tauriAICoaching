@@ -34,14 +34,17 @@ class ScreenRecorder {
     this._process = null;
     this._outputPath = null;
     this.isRecording = false;
+    this.startedAtMs = null;
   }
 
   start(userId = 'anon') {
+    // Early return keeps the original startedAtMs — correct for the shared recording
     if (this.isRecording) return this._outputPath;
 
     const dataDir = path.join(os.homedir(), '.local', 'share', 'valorant-ai-coaching');
     fs.mkdirSync(dataDir, { recursive: true });
-    this._outputPath = path.join(dataDir, `match_${userId}_${Date.now()}.mp4`);
+    this.startedAtMs = Date.now();
+    this._outputPath = path.join(dataDir, `match_${userId}_${this.startedAtMs}.mp4`);
 
     if (process.env.SIMULATE_GAME || process.env.SIMULATE_YOLO === 'true') {
       // Stub mode — don't spawn ffmpeg

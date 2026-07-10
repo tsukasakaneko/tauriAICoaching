@@ -144,7 +144,7 @@ export type MapName =
   | "icebox"
   | "abyss";
 
-export type MatchEventType = "position" | "kill" | "death" | (string & {});
+export type MatchEventType = "position" | "kill" | "death" | "assist" | (string & {});
 
 export interface MatchEvent {
   id: number;
@@ -158,11 +158,13 @@ export interface MatchMeta {
   map_name: MapName | null;
   agent: string | null;
   ally_side_initial: string | null;
+  events_source?: "riot" | "yolo" | null;
 }
 
 export interface ReplayData {
   events: MatchEvent[];
   meta: MatchMeta | null;
+  videoAvailable?: boolean;
 }
 
 // ─── Analysis history types (P1-8) ────────────────────────────────────────────

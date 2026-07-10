@@ -103,6 +103,12 @@ export const api = {
     const token = getToken() ?? "";
     return new EventSource(`${BASE_URL}/autorecord/status?token=${encodeURIComponent(token)}`);
   },
+
+  // 録画動画の URL — <video> はヘッダを付けられないため token をクエリで渡す
+  getSessionVideoUrl: (sessionId: number): string => {
+    const token = getToken() ?? "";
+    return `${BASE_URL}/sessions/${sessionId}/video?token=${encodeURIComponent(token)}`;
+  },
 };
 
 // ─── Tauri command wrappers ───────────────────────────────────────────────────

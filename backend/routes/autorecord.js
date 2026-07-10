@@ -8,8 +8,9 @@ const matchMonitor = require('../services/matchMonitor');
 const screenRecorder = require('../services/screenRecorder');
 const { analyzeVideo } = require('../services/videoAnalyzer');
 const { fetchLatestMatchStats } = require('../services/riotMatchData');
-const { mergeStats } = require('../services/statsMerge');
+const { mergeStats, riotTimelineToEvents, mergeEvents } = require('../services/statsMerge');
 const eventLog = require('../services/eventLog');
+const { deleteRecording } = require('../services/recordingRetention');
 
 const router = express.Router();
 
@@ -62,6 +63,9 @@ const activeSessions = new Map(); // userId → { sessionId, recordingPath }
 // P1-10: 直近の試合開始時刻(Riot match-details の誤帰属防止に使う)
 let lastMatchStartedAtMillis = null;
 
+// 録画開始エポック(ms) — Riot タイムラインを動画内時刻に変換するのに使う
+let lastRecordingStartedAtMs = null;
+
 // ─── Wire up monitor events ───────────────────────────────────────────────────
 
 matchMonitor.on('stateChanged', (newState, _prev) => {
@@ -75,14 +79,15 @@ matchMonitor.on('matchStarted', () => {
   lastMatchStartedAtMillis = matchMonitor.matchStartedAtMillis ?? Date.now();
   // Start the recorder ONCE per match (singleton — same path returned if already recording)
   const recordingPath = screenRecorder.start('shared');
+  lastRecordingStartedAtMs = screenRecorder.startedAtMs ?? Date.now();
   const matchStartTime = new Date().toISOString();
 
   for (const [userId] of sseClients) {
     // Create a DB session per user that all point to the same recording file
     const session = db.prepare(
-      `INSERT INTO match_sessions (user_id, match_started_at, recording_path, status)
-       VALUES (?, datetime('now'), ?, 'recording')`
-    ).run(userId, recordingPath);
+      `INSERT INTO match_sessions (user_id, match_started_at, recording_path, recording_started_at_ms, status)
+       VALUES (?, datetime('now'), ?, ?, 'recording')`
+    ).run(userId, recordingPath, lastRecordingStartedAtMs);
 
     activeSessions.set(userId, { sessionId: session.lastInsertRowid, recordingPath });
     broadcast(userId, 'recording_started', {
@@ -133,10 +138,14 @@ matchMonitor.on('resultScreenDetected', async () => {
       console.log(`[autorecord] riot stats acquired (match ${riotStats.matchId})`);
     }
     const videoAnalysis = mergeStats(result, riotStats);
+    // Riot タイムラインがあれば K/D/A イベントはそれで置き換える(アシスト付き・高精度)
+    const riotEvents = riotTimelineToEvents(riotStats, lastRecordingStartedAtMs);
+    const finalEvents = mergeEvents(events, riotEvents);
     const mergedMeta = {
       ...meta,
       mapName: riotStats?.mapName ?? meta.mapName,
       agent: riotStats?.agent ?? null,
+      eventsSource: riotEvents.length ? 'riot' : 'yolo',
     };
 
     for (const userId of activeUsers) {
@@ -147,13 +156,14 @@ matchMonitor.on('resultScreenDetected', async () => {
       ).run(JSON.stringify(videoAnalysis), session.sessionId);
       // Persist the per-frame timeline + map/agent for this session (one analysis → many sessions)
       try {
-        eventLog.persist(session.sessionId, events, mergedMeta);
+        eventLog.persist(session.sessionId, finalEvents, mergedMeta);
       } catch (logErr) {
         console.warn('[autorecord] failed to persist match events:', logErr.message);
       }
       broadcast(userId, 'form_ready', { state: 'done', videoAnalysis, sessionId: session.sessionId, timestamp: new Date().toISOString() });
       activeSessions.delete(userId);
     }
+    // 成功時は MP4 を保持する(リプレイ画面でイベント時刻へシーク再生するため)
   } catch (err) {
     console.error('[autorecord] analysis error:', err);
     for (const userId of activeUsers) {
@@ -165,14 +175,10 @@ matchMonitor.on('resultScreenDetected', async () => {
       broadcast(userId, 'error', { state: 'error', errorMessage: err.message });
       activeSessions.delete(userId);
     }
-  } finally {
-    // Delete the MP4 after analysis (success or failure) to reclaim disk space.
-    // The analysis JSON is persisted in DB; the raw video is no longer needed.
-    fs.unlink(videoPath, (unlinkErr) => {
-      if (unlinkErr && unlinkErr.code !== 'ENOENT') {
-        console.warn('[autorecord] failed to delete recording:', unlinkErr.message);
-      }
-    });
+    // 解析に失敗した録画は再生対象にならないので削除して容量を回収
+    try { deleteRecording(videoPath); } catch (delErr) {
+      console.warn('[autorecord] failed to delete recording:', delErr.message);
+    }
   }
 });
 
@@ -272,7 +278,7 @@ router.get('/sessions/:id/events', requireAuth, (req, res) => {
   if (isNaN(sessionId)) return res.status(400).json({ message: '無効なセッション ID です' });
 
   const session = db.prepare(
-    'SELECT user_id FROM match_sessions WHERE id = ?'
+    'SELECT user_id, status, recording_path FROM match_sessions WHERE id = ?'
   ).get(sessionId);
   if (!session) return res.status(404).json({ message: 'セッションが見つかりません' });
   if (session.user_id !== req.user.id) return res.status(403).json({ message: 'アクセス権がありません' });
@@ -282,10 +288,48 @@ router.get('/sessions/:id/events', requireAuth, (req, res) => {
   ).all(sessionId);
 
   const meta = db.prepare(
-    'SELECT map_name, agent, ally_side_initial FROM match_meta WHERE session_id = ?'
+    'SELECT map_name, agent, ally_side_initial, events_source FROM match_meta WHERE session_id = ?'
   ).get(sessionId) ?? null;
 
-  res.json({ events, meta });
+  const videoAvailable =
+    session.status === 'done' &&
+    !!session.recording_path &&
+    fs.existsSync(session.recording_path);
+
+  res.json({ events, meta, videoAvailable });
+});
+
+// Recorded match video (Range 対応 — <video> のシーク再生に必要) — paid feature
+// <video> はリクエストヘッダを付けられないため SSE と同じく token をクエリで受ける
+router.get('/sessions/:id/video', (req, res) => {
+  const user = authFromQuery(req, res);
+  if (!user) return;
+  if (user.is_paid !== 1) {
+    return res.status(403).json({ message: 'この機能はライセンスキーが必要です。' });
+  }
+
+  const sessionId = parseInt(req.params.id, 10);
+  if (isNaN(sessionId)) return res.status(400).json({ message: '無効なセッション ID です' });
+
+  const session = db.prepare(
+    'SELECT user_id, status, recording_path FROM match_sessions WHERE id = ?'
+  ).get(sessionId);
+  if (!session) return res.status(404).json({ message: 'セッションが見つかりません' });
+  if (session.user_id !== user.id) return res.status(403).json({ message: 'アクセス権がありません' });
+
+  // status ゲート: 録画中/エラーの部分ファイル(moov 未書き込み)は配信しない
+  if (session.status !== 'done' || !session.recording_path || !fs.existsSync(session.recording_path)) {
+    return res.status(404).json({ message: '録画は保存されていないか、削除されました' });
+  }
+
+  // Express 5 の sendFile は Accept-Ranges / Range / 206 / 416 をネイティブ処理する
+  res.sendFile(session.recording_path, {
+    headers: { 'Content-Type': 'video/mp4' },
+  }, (err) => {
+    if (err && !res.headersSent) {
+      res.status(500).json({ message: '動画の送信に失敗しました' });
+    }
+  });
 });
 
 // Latest analysis for this user

@@ -23,12 +23,13 @@ const insertChunk = db.transaction((sessionId, chunk) => {
 });
 
 const upsertMeta = db.prepare(
-  `INSERT INTO match_meta (session_id, map_name, agent, ally_side_initial)
-   VALUES (@session_id, @map_name, @agent, @ally_side_initial)
+  `INSERT INTO match_meta (session_id, map_name, agent, ally_side_initial, events_source)
+   VALUES (@session_id, @map_name, @agent, @ally_side_initial, @events_source)
    ON CONFLICT(session_id) DO UPDATE SET
      map_name          = excluded.map_name,
      agent             = excluded.agent,
-     ally_side_initial = excluded.ally_side_initial`
+     ally_side_initial = excluded.ally_side_initial,
+     events_source     = excluded.events_source`
 );
 
 // events: [{ frameIdx, tMs, type, payload }]
@@ -39,13 +40,14 @@ function writeEvents(sessionId, events) {
   return events.length;
 }
 
-// meta: { mapName, agent, allySideInitial } — any field may be null
+// meta: { mapName, agent, allySideInitial, eventsSource } — any field may be null
 function writeMeta(sessionId, meta = {}) {
   upsertMeta.run({
     session_id: sessionId,
     map_name: meta.mapName ?? null,
     agent: meta.agent ?? null,
     ally_side_initial: meta.allySideInitial ?? null,
+    events_source: meta.eventsSource ?? null,
   });
 }
 

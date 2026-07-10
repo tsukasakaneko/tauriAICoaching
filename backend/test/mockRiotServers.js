@@ -112,7 +112,70 @@ async function startMockRiot({ historyEmptyAttempts = 0 } = {}) {
 
     if (url.pathname === '/match-details/v1/matches/match-001') {
       return json(res, 200, {
-        matchInfo: { mapId: state.matchMap, queueID: 'competitive' },
+        matchInfo: {
+          mapId: state.matchMap,
+          queueID: 'competitive',
+          gameStartMillis: state.gameStartTime,
+        },
+        // キル/デス/アシストのタイムライン抽出用: 自分がキル/被キル/アシスト
+        // したイベントと、無関係なイベント(フィルタ検証用)を1件ずつ
+        roundResults: [
+          {
+            roundNum: 0,
+            playerStats: [
+              {
+                subject: OWN_PUUID,
+                kills: [
+                  {
+                    killer: OWN_PUUID,
+                    victim: 'enemy-puuid-1',
+                    assistants: [],
+                    timeSinceGameStartMillis: 65_000,
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            roundNum: 1,
+            playerStats: [
+              {
+                subject: 'enemy-puuid-1',
+                kills: [
+                  {
+                    killer: 'enemy-puuid-1',
+                    victim: OWN_PUUID,
+                    assistants: [],
+                    timeSinceGameStartMillis: 130_000,
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            roundNum: 2,
+            playerStats: [
+              {
+                subject: FRIEND_PUUID,
+                kills: [
+                  {
+                    killer: FRIEND_PUUID,
+                    victim: 'enemy-puuid-2',
+                    assistants: [OWN_PUUID],
+                    timeSinceGameStartMillis: 200_000,
+                  },
+                  // 無関係なキル(自分は killer/victim/assistants のどれでもない)
+                  {
+                    killer: FRIEND_PUUID,
+                    victim: 'enemy-puuid-3',
+                    assistants: [],
+                    timeSinceGameStartMillis: 210_000,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
         players: [
           {
             subject: FRIEND_PUUID,

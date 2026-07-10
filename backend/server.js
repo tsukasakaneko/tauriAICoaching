@@ -23,6 +23,7 @@ const { router: coachingRouter } = require("./routes/coaching");
 const { router: autoRecordRouter } = require("./routes/autorecord");
 const { router: historyRouter } = require("./routes/history");
 const { sweepOrphanFrames } = require("./services/videoAnalyzer");
+const { sweepStaleRecordings } = require("./services/recordingRetention");
 
 // Reclaim disk from frame-extraction temp dirs left by crashed runs.
 try {
@@ -30,6 +31,15 @@ try {
   if (removed > 0) console.log(`[startup] swept ${removed} orphan frame dir(s)`);
 } catch (err) {
   console.warn("[startup] orphan frame sweep failed:", err.message);
+}
+
+// Reclaim partial/failed recordings (crash or mid-match stop). Done-session
+// videos are kept for replay.
+try {
+  const removed = sweepStaleRecordings();
+  if (removed > 0) console.log(`[startup] swept ${removed} stale recording(s)`);
+} catch (err) {
+  console.warn("[startup] stale recording sweep failed:", err.message);
 }
 
 const app = express();

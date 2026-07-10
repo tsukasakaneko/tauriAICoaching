@@ -835,6 +835,44 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
 }
 .event-row.event-type-kill td { color: var(--accent); }
 .event-row.event-type-death td { color: var(--text-muted); }
+.event-row.event-type-assist td { color: var(--text); }
+
+.event-row.clickable { cursor: pointer; }
+.event-row.clickable:hover td { background: rgba(255, 70, 84, 0.08); }
+
+.replay-video {
+  width: 100%;
+  max-height: 480px;
+  background: #000;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.replay-video-hint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.no-video-msg {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+.replay-coaching-panel .coaching-focus {
+  margin-bottom: 0.5rem;
+}
+.replay-coaching-panel .coaching-improvements {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--text-muted);
+}
+.replay-coaching-panel .coaching-improvements li {
+  margin-bottom: 0.25rem;
+}
 
 .no-events-msg {
   color: var(--text-muted);

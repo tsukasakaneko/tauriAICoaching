@@ -127,6 +127,7 @@ export default function App() {
           sessionId={sessionId}
           backLabel={report ? "← レポートに戻る" : "← 履歴に戻る"}
           onBack={() => setScreen(report ? "report" : "history")}
+          report={report}
         />
       )}
 
