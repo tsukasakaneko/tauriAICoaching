@@ -13,6 +13,8 @@ import type {
   HistoryResponse,
   SavedReport,
   PreviousContext,
+  HeatmapMapEntry,
+  DeathHeatmapResponse,
 } from "./types";
 
 const BASE_URL = "http://127.0.0.1:3001";
@@ -109,6 +111,16 @@ export const api = {
     const token = getToken() ?? "";
     return `${BASE_URL}/sessions/${sessionId}/video?token=${encodeURIComponent(token)}`;
   },
+
+  // デス位置ヒートマップ
+  getHeatmapMaps: () => request<{ maps: HeatmapMapEntry[] }>("/heatmap/maps"),
+
+  getHeatmapDeaths: (map: string) =>
+    request<DeathHeatmapResponse>(`/heatmap/deaths?map=${encodeURIComponent(map)}`),
+
+  // 公開ゲームアセットのプロキシ(認証不要)
+  getMapMinimapUrl: (map: string): string =>
+    `${BASE_URL}/maps/${encodeURIComponent(map)}/minimap`,
 };
 
 // ─── Tauri command wrappers ───────────────────────────────────────────────────

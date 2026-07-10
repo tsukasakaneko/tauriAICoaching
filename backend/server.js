@@ -22,6 +22,7 @@ const authRoutes = require("./routes/auth");
 const { router: coachingRouter } = require("./routes/coaching");
 const { router: autoRecordRouter } = require("./routes/autorecord");
 const { router: historyRouter } = require("./routes/history");
+const { router: heatmapRouter } = require("./routes/heatmap");
 const { sweepOrphanFrames } = require("./services/videoAnalyzer");
 const { sweepStaleRecordings } = require("./services/recordingRetention");
 
@@ -74,6 +75,7 @@ app.use("/auth", authRoutes);
 app.use("/", coachingRouter);
 app.use("/", autoRecordRouter);
 app.use("/", historyRouter);
+app.use("/", heatmapRouter);
 
 app.use((_req, res) => res.status(404).json({ message: "Not found" }));
 

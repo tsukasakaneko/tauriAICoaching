@@ -67,6 +67,7 @@ interface Props {
   onAutoRecord: () => void;
   onSettings: () => void;
   onHistory: () => void;
+  onHeatmap: () => void;
   onUpgradeNeeded: () => void;
 }
 
@@ -79,6 +80,7 @@ export default function FormScreen({
   onAutoRecord,
   onSettings,
   onHistory,
+  onHeatmap,
   onUpgradeNeeded,
 }: Props) {
   const [rank, setRank] = useState<Rank>(() => loadSavedField<Rank>("rank", "シルバー"));
@@ -206,6 +208,11 @@ export default function FormScreen({
           <button className="icon-btn" onClick={onHistory} title="分析履歴">
             🕒
           </button>
+          {user.isPaid && (
+            <button className="icon-btn" onClick={onHeatmap} title="デスマップ">
+              🗺
+            </button>
+          )}
           <button className="icon-btn" onClick={onSettings} title="設定">
             ⚙
           </button>

@@ -940,3 +940,67 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
   text-align: center;
   padding: 1rem 0;
 }
+
+/* ── デス位置ヒートマップ ─────────────────────────────────────────────────── */
+.heatmap-subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.map-tab-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.map-tab {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+.map-tab:hover { color: var(--text); }
+.map-tab.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(255, 70, 84, 0.08);
+}
+
+.heatmap-canvas-wrap {
+  position: relative;
+  width: min(560px, 100%);
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #10141a;
+}
+.heatmap-map-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: brightness(0.55);
+}
+.heatmap-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.heatmap-note {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  margin-top: 0.5rem;
+}
+.heatmap-disclaimer { font-size: 0.78rem; }

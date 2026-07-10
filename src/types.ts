@@ -1,4 +1,4 @@
-export type Screen = "login" | "form" | "report" | "autorecord" | "settings" | "replay" | "history";
+export type Screen = "login" | "form" | "report" | "autorecord" | "settings" | "replay" | "history" | "heatmap";
 
 export interface User {
   id: number;
@@ -165,6 +165,32 @@ export interface ReplayData {
   events: MatchEvent[];
   meta: MatchMeta | null;
   videoAvailable?: boolean;
+}
+
+// ─── デス位置ヒートマップ ─────────────────────────────────────────────────────
+// map は string — Riot 由来で fracture/pearl/breeze 等 MapName union 外の値も来る
+
+export interface HeatmapMapEntry {
+  map: string;
+  deaths: number;
+  sessions: number;
+}
+
+export interface DeathPoint {
+  x: number;
+  y: number;
+  calibrated: boolean;
+  tMs: number;
+  sessionId: number;
+}
+
+export interface DeathHeatmapResponse {
+  map: string;
+  totalDeaths: number;
+  matchedDeaths: number;
+  calibratedDeaths: number;
+  sessions: number;
+  points: DeathPoint[];
 }
 
 // ─── Analysis history types (P1-8) ────────────────────────────────────────────

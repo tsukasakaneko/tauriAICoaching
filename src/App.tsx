@@ -8,6 +8,7 @@ import AutoRecordScreen from "./components/AutoRecordScreen";
 import ReplayScreen from "./components/ReplayScreen";
 import SettingsScreen from "./components/SettingsScreen";
 import HistoryScreen from "./components/HistoryScreen";
+import HeatmapScreen from "./components/HeatmapScreen";
 import UpgradeModal from "./components/UpgradeModal";
 
 export default function App() {
@@ -101,6 +102,7 @@ export default function App() {
           onAutoRecord={() => setScreen("autorecord")}
           onSettings={() => setScreen("settings")}
           onHistory={() => setScreen("history")}
+          onHeatmap={() => setScreen("heatmap")}
           onUpgradeNeeded={() => setShowUpgradeModal(true)}
         />
       )}
@@ -129,6 +131,10 @@ export default function App() {
           onBack={() => setScreen(report ? "report" : "history")}
           report={report}
         />
+      )}
+
+      {screen === "heatmap" && user && (
+        <HeatmapScreen onBack={() => setScreen("form")} />
       )}
 
       {screen === "history" && user && (

@@ -4,31 +4,51 @@ const { detectObjects } = require('./yoloInference');
 
 const MINIMAP_CLASSES = ['minimap_region', 'player_dot', 'enemy_dot'];
 
+// ドット中心を minimap_region bbox 内の 0-1 座標に正規化する(マップ座標)。
+// 領域サイズが不正なら null(呼び出し側は未補正座標にフォールバック)。
+function normalizeDotInRegion(dotBbox, regionBbox) {
+  const [rx, ry, rw, rh] = regionBbox;
+  if (!(rw > 0) || !(rh > 0)) return null;
+  const cx = dotBbox[0] + dotBbox[2] / 2;
+  const cy = dotBbox[1] + dotBbox[3] / 2;
+  return {
+    x: Math.min(1, Math.max(0, (cx - rx) / rw)),
+    y: Math.min(1, Math.max(0, (cy - ry) / rh)),
+  };
+}
+
 class MinimapAnalyzer {
   constructor() {
-    this._positions = [];  // [{x, y}] normalized 0-1
+    // [{frameIdx, x, y, cal}] — x/y はフレーム全体の 0-1(ゾーン判定用)、
+    // cal はミニマップ領域内で正規化したマップ座標(検出できた時のみ)
+    this._positions = [];
   }
 
   async processFrame(imageBuf, frameIdx = 0) {
     const detections = await detectObjects(imageBuf, 'valorant_minimap', MINIMAP_CLASSES);
     const playerDot = detections.find(d => d.class === 'player_dot');
+    const region = detections.find(d => d.class === 'minimap_region');
 
     if (playerDot) {
       const [x, y, w, h] = playerDot.bbox;
       this._positions.push({
         frameIdx,
-        x: (x + w / 2) / 640,  // normalize to 0-1 (YOLO 640px crop space; affine fix is Phase 2)
+        x: (x + w / 2) / 640,  // normalize to 0-1 (YOLO 640px crop space)
         y: (y + h / 2) / 640,
+        cal: region ? normalizeDotInRegion(playerDot.bbox, region.bbox) : null,
       });
     }
   }
 
   // Per-frame self position events for the timeline log.
+  // calibrated=true の x/y はマップ座標(デスヒートマップ等の可視化に使える)。
   getEvents() {
     return this._positions.map(p => ({
       frameIdx: p.frameIdx,
       type: 'position',
-      payload: { x: p.x, y: p.y },
+      payload: p.cal
+        ? { x: p.cal.x, y: p.cal.y, calibrated: true }
+        : { x: p.x, y: p.y, calibrated: false },
     }));
   }
 
@@ -67,4 +87,4 @@ class MinimapAnalyzer {
   }
 }
 
-module.exports = { MinimapAnalyzer };
+module.exports = { MinimapAnalyzer, normalizeDotInRegion };

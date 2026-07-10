@@ -200,7 +200,12 @@ function simulateDetections(modelName) {
       : [];
   }
   if (modelName === 'valorant_minimap') {
-    return [{ class: 'player_dot', confidence: 0.95, bbox: [50 + Math.random() * 150, 50 + Math.random() * 150, 8, 8] }];
+    // region も返す — キャリブレーション経路(マップ座標化)を開発環境で通すため。
+    // ドットは領域内に収め、シミュレーションでもマップ全域に分布させる。
+    return [
+      { class: 'minimap_region', confidence: 0.97, bbox: [26, 26, 210, 210] },
+      { class: 'player_dot', confidence: 0.95, bbox: [30 + Math.random() * 195, 30 + Math.random() * 195, 8, 8] },
+    ];
   }
   return [];
 }
