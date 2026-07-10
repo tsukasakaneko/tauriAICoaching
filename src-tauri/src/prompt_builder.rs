@@ -14,6 +14,22 @@ pub struct AnalyzePayload {
     /// P1-9: 前回セッションの指標+前回レポートの課題ダイジェスト(前回比用)
     #[serde(rename = "previousSession", default)]
     pub previous_session: Option<PreviousSessionData>,
+    /// P2-3: 自動録画セッションのキル/デスタイムライン(時刻引用用)。
+    /// 手動分析・旧クライアントには存在しない。
+    #[serde(default)]
+    pub timeline: Option<Vec<TimelineEvent>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TimelineEvent {
+    #[serde(rename = "tMs")]
+    pub t_ms: u64,
+    #[serde(rename = "eventType")]
+    pub event_type: String,
+    #[serde(default)]
+    pub headshot: bool,
+    #[serde(default)]
+    pub ability: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,6 +61,18 @@ impl AnalyzePayload {
                 .as_ref()
                 .is_some_and(|p| p.metrics.is_some())
     }
+
+    /// P2-3: time_refs スキーマを要求できるのはタイムラインを注入した場合のみ。
+    /// タイムライン無しで要求すると AI が架空の時刻を捏造するリスクがある。
+    pub fn has_timeline(&self) -> bool {
+        self.timeline.as_ref().is_some_and(|t| !t.is_empty())
+    }
+}
+
+/// 試合内経過ミリ秒を "M:SS" 表記にする(フロントの formatMatchTime と同一形式)
+fn format_match_time(t_ms: u64) -> String {
+    let total_seconds = t_ms / 1000;
+    format!("{}:{:02}", total_seconds / 60, total_seconds % 60)
 }
 
 #[derive(Debug, Deserialize)]
@@ -125,7 +153,7 @@ fn rank_to_english(rank: &str) -> &str {
 
 // ─── Prompt builders ──────────────────────────────────────────────────────────
 
-pub fn build_system_prompt(agent: &str, rank: &str, has_previous: bool) -> String {
+pub fn build_system_prompt(agent: &str, rank: &str, has_previous: bool, has_timeline: bool) -> String {
     let kb = get_knowledge_base();
 
     let mut prompt = r#"あなたはValorantのプロコーチです。
@@ -176,6 +204,14 @@ pub fn build_system_prompt(agent: &str, rank: &str, has_previous: bool) -> Strin
         ""
     };
 
+    // P2-3: タイムライン注入時のみ time_refs をスキーマに含める
+    let time_refs_schema = if has_timeline {
+        r#",
+      "time_refs": [{ "t_ms": 222000, "label": "3:42 のデス" }]"#
+    } else {
+        ""
+    };
+
     prompt.push_str(&format!(r#"
 以下のJSON形式のみで返答してください：
 {{
@@ -184,7 +220,7 @@ pub fn build_system_prompt(agent: &str, rank: &str, has_previous: bool) -> Strin
       "title": "改善点のタイトル",
       "description": "詳細な説明（数値データがあれば引用）",
       "cause": "問題の根本原因",
-      "actions": ["具体的なアクション1", "アクション2", "アクション3"]
+      "actions": ["具体的なアクション1", "アクション2", "アクション3"]{time_refs_schema}
     }}
   ],
   "training_plan": [
@@ -211,6 +247,17 @@ progress（前回比）の規則:
 - assessment は "improved"（改善）/ "declined"（悪化）/ "flat"（横ばい）のいずれか
 - デス数・連敗数など「少ないほど良い」指標は方向に注意して判定すること
 - comparisons には HS率・KDA・ポジショニング傾向・主な活動エリアなど比較可能な指標を最大5件含めること
+"#);
+    }
+
+    if has_timeline {
+        prompt.push_str(r#"
+
+time_refs（該当シーン）の規則:
+- 各改善点について、根拠となるシーンがタイムラインにあれば time_refs として最大3件挙げること
+- t_ms はユーザープロンプトのタイムラインに実在するイベントの時刻（ミリ秒）のみを使用し、新しい時刻を作らないこと
+- label は「3:42 のデス」のように時刻+イベントの短い日本語にすること
+- 該当するシーンが無い改善点では time_refs を空配列にすること
 "#);
     }
 
@@ -273,6 +320,35 @@ pub fn build_user_prompt(payload: &AnalyzePayload) -> String {
         prompt.push_str("\n【自動解析データ】\n");
         push_video_metrics(&mut prompt, va);
         prompt.push_str("\n上記の客観的データと、プレイヤーの自己評価を合わせて分析してください。\n");
+    }
+
+    // P2-3: キル/デスのタイムラインを注入し、改善点に該当シーン(time_refs)を要求
+    if payload.has_timeline() {
+        if let Some(timeline) = &payload.timeline {
+            prompt.push_str("\n【タイムライン（試合内経過時刻のキル/デス）】\n");
+            for ev in timeline {
+                let label = match ev.event_type.as_str() {
+                    "kill" => "キル",
+                    "death" => "デス",
+                    other => other,
+                };
+                let mut tags = Vec::new();
+                if ev.headshot { tags.push("ヘッドショット"); }
+                if ev.ability { tags.push("アビリティ"); }
+                let suffix = if tags.is_empty() {
+                    String::new()
+                } else {
+                    format!("（{}）", tags.join("・"))
+                };
+                prompt.push_str(&format!(
+                    "- {} {}{} (t_ms: {})\n",
+                    format_match_time(ev.t_ms), label, suffix, ev.t_ms
+                ));
+            }
+            prompt.push_str(
+                "\n改善点ごとに、上記タイムラインから根拠となるシーンを time_refs で引用してください。\n",
+            );
+        }
     }
 
     // P1-9: 前回セッションのデータと前回レポートの課題を注入し、前回比を要求
@@ -339,6 +415,7 @@ mod tests {
             review: String::new(),
             video_analysis: None,
             previous_session: None,
+            timeline: None,
         }
     }
 
@@ -361,23 +438,40 @@ mod tests {
         }
     }
 
+    fn timeline_events() -> Vec<TimelineEvent> {
+        vec![
+            TimelineEvent { t_ms: 222_000, event_type: "death".to_string(), headshot: false, ability: false },
+            TimelineEvent { t_ms: 310_000, event_type: "kill".to_string(), headshot: true, ability: false },
+        ]
+    }
+
     // P0-3: リモート分析もこのビルダーを使うため、知識ベース注入を保証する
     #[test]
     fn system_prompt_injects_knowledge_base() {
-        let prompt = build_system_prompt("Jett", "ゴールド", false);
+        let prompt = build_system_prompt("Jett", "ゴールド", false, false);
         assert!(prompt.contains("エージェント特性"), "agent knowledge should be injected");
         assert!(prompt.contains("ゴールド帯へのコーチング指針"), "rank calibration should be injected");
         assert!(prompt.contains("improvements"), "JSON schema instruction should be present");
         assert!(!prompt.contains("\"progress\""), "progress schema must be absent without previous data");
+        assert!(!prompt.contains("time_refs"), "time_refs schema must be absent without timeline");
     }
 
     // P1-9: 前回データがある場合のみ progress スキーマを含める
     #[test]
     fn system_prompt_with_previous_includes_progress_schema() {
-        let prompt = build_system_prompt("Jett", "ゴールド", true);
+        let prompt = build_system_prompt("Jett", "ゴールド", true, false);
         assert!(prompt.contains("\"progress\""), "progress schema should be present");
         assert!(prompt.contains("\"assessment\""), "assessment field should be in schema");
         assert!(prompt.contains("improved"), "assessment values should be documented");
+    }
+
+    // P2-3: タイムライン注入時のみ time_refs スキーマ+捏造禁止規則を含める
+    #[test]
+    fn system_prompt_with_timeline_includes_time_refs_schema() {
+        let prompt = build_system_prompt("Jett", "ゴールド", false, true);
+        assert!(prompt.contains("\"time_refs\""), "time_refs schema should be present");
+        assert!(prompt.contains("time_refs（該当シーン）の規則"), "time_refs rules should be present");
+        assert!(prompt.contains("新しい時刻を作らない"), "anti-fabrication rule should be present");
     }
 
     #[test]
@@ -423,6 +517,29 @@ mod tests {
         payload.video_analysis = Some(metrics(0.28));
         let prompt = build_user_prompt(&payload);
         assert!(!prompt.contains("前回"), "no previous-session text expected");
+    }
+
+    // P2-3: タイムラインが M:SS + t_ms 付きで注入されること
+    #[test]
+    fn user_prompt_includes_timeline_block() {
+        let mut payload = base_payload();
+        payload.timeline = Some(timeline_events());
+        let prompt = build_user_prompt(&payload);
+        assert!(prompt.contains("【タイムライン"), "timeline heading expected");
+        assert!(prompt.contains("- 3:42 デス (t_ms: 222000)"), "death entry expected");
+        assert!(prompt.contains("- 5:10 キル（ヘッドショット） (t_ms: 310000)"), "kill entry expected");
+        assert!(prompt.contains("time_refs で引用"), "time_refs instruction expected");
+        assert!(payload.has_timeline());
+    }
+
+    #[test]
+    fn user_prompt_without_timeline_has_no_timeline_block() {
+        let mut payload = base_payload();
+        payload.video_analysis = Some(metrics(0.28));
+        payload.timeline = Some(vec![]);
+        let prompt = build_user_prompt(&payload);
+        assert!(!prompt.contains("タイムライン"), "no timeline block expected");
+        assert!(!payload.has_timeline(), "empty timeline must not count as present");
     }
 
     // 前回レポートだけ(指標なし=手動分析ユーザー)でも課題参照が効くこと

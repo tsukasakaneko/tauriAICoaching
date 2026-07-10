@@ -5,7 +5,7 @@ import { useHistory } from "../hooks/useHistory";
 
 interface Props {
   onOpenReport: (saved: SavedReport) => void;
-  onOpenReplay: (sessionId: number) => void;
+  onOpenReplay: (sessionId: number, reportId: number | null) => void;
   onBack: () => void;
 }
 
@@ -105,7 +105,7 @@ export default function HistoryScreen({ onOpenReport, onOpenReplay, onBack }: Pr
                         </button>
                       )}
                       {s.status === "done" && (
-                        <button className="secondary-btn" onClick={() => onOpenReplay(s.id)}>
+                        <button className="secondary-btn" onClick={() => onOpenReplay(s.id, s.reportId)}>
                           リプレイ
                         </button>
                       )}

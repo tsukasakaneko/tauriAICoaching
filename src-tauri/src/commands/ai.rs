@@ -50,6 +50,7 @@ pub fn build_analysis_prompts(payload: AnalyzePayload) -> Result<BuiltPrompts, S
             &payload.agent,
             &payload.rank,
             payload.has_comparable_previous(),
+            payload.has_timeline(),
         ),
         user_prompt: build_user_prompt(&payload),
     })
@@ -136,6 +137,7 @@ pub async fn ai_analyze(
         &payload.agent,
         &payload.rank,
         payload.has_comparable_previous(),
+        payload.has_timeline(),
     );
     let user_prompt = build_user_prompt(&payload);
 

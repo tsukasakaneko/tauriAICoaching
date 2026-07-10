@@ -10,12 +10,14 @@ interface Props {
   onBack: () => void;
   onUpgrade: () => void;
   onReplay: () => void;
+  /** P2-3: 改善点の time_refs から該当時刻のリプレイへジャンプ */
+  onReplayAt: (tMs: number) => void;
 }
 
 const isTauri = () =>
   typeof (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== "undefined";
 
-export default function ReportScreen({ report, sessionId, onBack, onUpgrade, onReplay }: Props) {
+export default function ReportScreen({ report, sessionId, onBack, onUpgrade, onReplay, onReplayAt }: Props) {
   const [isFree, setIsFree] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareHint, setShareHint] = useState<string | null>(null);
@@ -173,6 +175,21 @@ export default function ReportScreen({ report, sessionId, onBack, onUpgrade, onR
                 ))}
               </ul>
             </div>
+            {sessionId !== null && item.time_refs && item.time_refs.length > 0 && (
+              <div className="time-refs">
+                <span className="label">該当シーン:</span>
+                {item.time_refs.map((ref, j) => (
+                  <button
+                    key={j}
+                    className="time-ref-chip"
+                    onClick={() => onReplayAt(ref.t_ms)}
+                    title="リプレイの該当時刻へジャンプ"
+                  >
+                    ⏱ {ref.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </section>

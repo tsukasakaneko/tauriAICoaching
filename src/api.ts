@@ -13,6 +13,7 @@ import type {
   HistoryResponse,
   SavedReport,
   PreviousContext,
+  TimelineDigestEvent,
 } from "./types";
 
 const BASE_URL = "http://127.0.0.1:3001";
@@ -111,7 +112,8 @@ export const tauriApi = {
   analyze: (
     formData: CoachingFormData,
     videoAnalysis: VideoAnalysisResult | null,
-    previousSession: PreviousContext | null = null
+    previousSession: PreviousContext | null = null,
+    timeline: TimelineDigestEvent[] | null = null
   ): Promise<CoachingReport> =>
     invoke<CoachingReport>("ai_analyze", {
       payload: {
@@ -121,6 +123,7 @@ export const tauriApi = {
         review: formData.review,
         videoAnalysis: videoAnalysis ?? null,
         previousSession: previousSession ?? null,
+        timeline: timeline ?? null,
       },
     }),
 
@@ -131,7 +134,8 @@ export const tauriApi = {
   analyzeRemote: async (
     formData: CoachingFormData,
     videoAnalysis: VideoAnalysisResult | null,
-    previousSession: PreviousContext | null = null
+    previousSession: PreviousContext | null = null,
+    timeline: TimelineDigestEvent[] | null = null
   ): Promise<CoachingReport> => {
     const prompts = await invoke<{ systemPrompt: string; userPrompt: string }>(
       "build_analysis_prompts",
@@ -143,6 +147,7 @@ export const tauriApi = {
           review: formData.review,
           videoAnalysis: videoAnalysis ?? null,
           previousSession: previousSession ?? null,
+          timeline: timeline ?? null,
         },
       }
     );

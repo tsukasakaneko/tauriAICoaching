@@ -9,8 +9,10 @@ import type {
   UsageStatus,
   AiProvider,
   PreviousContext,
+  TimelineDigestEvent,
 } from "../types";
 import { api, tauriApi } from "../api";
+import { buildTimelineDigest } from "../utils/timeline";
 
 const RANKS: Rank[] = [
   "アイアン", "ブロンズ", "シルバー", "ゴールド", "プラチナ",
@@ -163,13 +165,27 @@ export default function FormScreen({
         previousSession = null;
       }
 
+      // P2-3: 自動録画セッションがあればキル/デスのタイムラインを注入し、
+      // レポートに該当シーンの時刻参照(time_refs)を出させる。
+      // 取得失敗はタイムライン無しとして分析を続行する。
+      let timeline: TimelineDigestEvent[] | null = null;
+      if (sessionId !== null) {
+        try {
+          const replay = await api.getSessionEvents(sessionId);
+          const digest = buildTimelineDigest(replay.events);
+          timeline = digest.length > 0 ? digest : null;
+        } catch {
+          timeline = null;
+        }
+      }
+
       // P0-2: 無料ティア(3回/日)と cloud ティア+Cloud プロバイダはリモート経由。
       // pro や自前APIキー/Ollama 利用時はローカル(Tauri コマンド)経由。
       const useRemote =
         isFreeTier || (usageStatus?.tier === "cloud" && aiProvider === "cloud");
       const result = useRemote
-        ? await tauriApi.analyzeRemote(formData, videoAnalysis, previousSession)
-        : await tauriApi.analyze(formData, videoAnalysis, previousSession);
+        ? await tauriApi.analyzeRemote(formData, videoAnalysis, previousSession, timeline)
+        : await tauriApi.analyze(formData, videoAnalysis, previousSession, timeline);
       onReportReady(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "分析に失敗しました";

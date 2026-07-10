@@ -30,11 +30,19 @@ export interface CoachingFormData {
   review: string;
 }
 
+/** P2-3: 改善点が参照する試合内の時刻。リプレイの該当時点へのジャンプに使う */
+export interface TimeRef {
+  t_ms: number;
+  label: string;
+}
+
 export interface Improvement {
   title: string;
   description: string;
   cause: string;
   actions: string[];
+  /** P2-3: タイムライン注入時のみ AI が出力する(旧レポートには存在しない) */
+  time_refs?: TimeRef[];
 }
 
 export type ProgressAssessment = "improved" | "declined" | "flat";
@@ -163,6 +171,14 @@ export interface MatchMeta {
 export interface ReplayData {
   events: MatchEvent[];
   meta: MatchMeta | null;
+}
+
+/** P2-3: プロンプトに注入するキル/デスの時系列ダイジェスト(position は除外) */
+export interface TimelineDigestEvent {
+  tMs: number;
+  eventType: "kill" | "death";
+  headshot?: boolean;
+  ability?: boolean;
 }
 
 // ─── Analysis history types (P1-8) ────────────────────────────────────────────

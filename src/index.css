@@ -902,3 +902,168 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 0.95rem; 
   text-align: center;
   padding: 1rem 0;
 }
+
+/* ── リプレイレビュー (P2-1/P2-2) ──────────────────────────────────────────── */
+.review-panes {
+  display: grid;
+  grid-template-columns: minmax(320px, 5fr) minmax(360px, 6fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .review-panes { grid-template-columns: 1fr; }
+}
+.review-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.replay-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.minimap-replay { display: flex; flex-direction: column; gap: 0.6rem; }
+.minimap-canvas-wrapper {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #10131d;
+}
+.minimap-canvas { display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; }
+.minimap-bg { fill: #10131d; }
+.minimap-grid line { stroke: #1e2233; stroke-width: 0.25; }
+.minimap-map-label {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.6rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  background: rgba(15, 17, 23, 0.7);
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+}
+.minimap-path-full {
+  fill: none;
+  stroke: #3a4060;
+  stroke-width: 0.35;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.minimap-path-trail {
+  fill: none;
+  stroke: #6ea8ff;
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.minimap-current { fill: #6ea8ff; stroke: #cfe3ff; stroke-width: 0.35; }
+.minimap-mark { opacity: 0.35; }
+.minimap-mark.is-passed { opacity: 1; }
+.minimap-mark-kill circle { fill: var(--success); }
+.minimap-mark-death line { stroke: var(--accent); stroke-width: 0.6; stroke-linecap: round; }
+
+.minimap-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.minimap-play-btn { min-width: 2.5rem; }
+.minimap-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.minimap-speeds { display: flex; gap: 0.25rem; margin-left: auto; }
+.minimap-speed-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.minimap-speed-btn.is-active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.minimap-scrubber { position: relative; padding-bottom: 0.6rem; }
+.minimap-scrubber input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.scrubber-marks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.4rem;
+  pointer-events: none;
+}
+.scrubber-tick {
+  position: absolute;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-1px);
+  border-radius: 1px;
+}
+.scrubber-tick-kill { background: var(--success); }
+.scrubber-tick-death { background: var(--accent); }
+
+.minimap-legend {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+.legend-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+}
+.legend-kill { background: var(--success); }
+.legend-death { background: var(--accent); }
+.legend-pos { background: #6ea8ff; }
+
+.event-log-details summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+  user-select: none;
+}
+.event-log-details[open] summary { color: var(--text); }
+
+/* ── time_refs チップ (P2-3) ───────────────────────────────────────────────── */
+.time-refs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+.time-ref-chip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.time-ref-chip:hover {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+}

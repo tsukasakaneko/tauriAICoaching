@@ -18,6 +18,10 @@ export default function App() {
   const [sessionId, setSessionId] = useState<number | null>(null);
   // 履歴から開いたレポート/リプレイは「戻る」で履歴に帰す
   const [reportOrigin, setReportOrigin] = useState<"form" | "history">("form");
+  // P2-2: 履歴からリプレイを開く場合のレポートID(本体は ReplayScreen が取得)
+  const [replayReportId, setReplayReportId] = useState<number | null>(null);
+  // P2-3: レポートの time_refs から遷移した際の初期シーク時刻
+  const [replaySeekMs, setReplaySeekMs] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
@@ -65,13 +69,23 @@ export default function App() {
   const handleOpenSavedReport = (saved: SavedReport) => {
     setReport(saved.report);
     setSessionId(saved.sessionId);
+    setReplayReportId(null);
+    setReplaySeekMs(null);
     setReportOrigin("history");
     setScreen("report");
   };
 
-  const handleOpenReplayFromHistory = (sid: number) => {
+  const handleOpenReplayFromHistory = (sid: number, reportId: number | null) => {
     setSessionId(sid);
     setReport(null);
+    setReplayReportId(reportId);
+    setReplaySeekMs(null);
+    setScreen("replay");
+  };
+
+  // P2-3: レポートの time_refs チップから該当時刻のリプレイへジャンプ
+  const handleReplayAt = (tMs: number | null) => {
+    setReplaySeekMs(tMs);
     setScreen("replay");
   };
 
@@ -118,13 +132,17 @@ export default function App() {
             }
           }}
           onUpgrade={() => setShowUpgradeModal(true)}
-          onReplay={() => setScreen("replay")}
+          onReplay={() => handleReplayAt(null)}
+          onReplayAt={handleReplayAt}
         />
       )}
 
       {screen === "replay" && sessionId !== null && (
         <ReplayScreen
           sessionId={sessionId}
+          report={report}
+          reportId={replayReportId}
+          initialSeekMs={replaySeekMs}
           backLabel={report ? "← レポートに戻る" : "← 履歴に戻る"}
           onBack={() => setScreen(report ? "report" : "history")}
         />
